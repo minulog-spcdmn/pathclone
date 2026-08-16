@@ -44,7 +44,7 @@ export const ZONES: Record<string, ZoneDef> = {
     width: 40,
     height: 40,
     monsterPool: ['rot_hound', 'bog_crawler', 'tide_archer'],
-    maxMonsters: 14,
+    maxMonsters: 30,
     connections: [
       { to: 'hub_town', label: 'Ashport Landing' },
       { to: 'a1_outpost', label: 'Ruined Outpost' },
@@ -62,7 +62,7 @@ export const ZONES: Record<string, ZoneDef> = {
     width: 34,
     height: 34,
     monsterPool: ['drowned_thrall', 'tide_shaman', 'bog_crawler'],
-    maxMonsters: 16,
+    maxMonsters: 34,
     connections: [
       { to: 'a1_coast', label: 'The Blighted Coast' },
       { to: 'a1_throne', label: 'The Sunken Throne' },
@@ -98,7 +98,7 @@ export const ZONES: Record<string, ZoneDef> = {
     width: 44,
     height: 44,
     monsterPool: ['sand_scorpion', 'dune_stalker', 'cinder_slinger'],
-    maxMonsters: 16,
+    maxMonsters: 34,
     connections: [
       { to: 'hub_town', label: 'Ashport Landing' },
       { to: 'a2_temple', label: 'Buried Temple' },
@@ -116,7 +116,7 @@ export const ZONES: Record<string, ZoneDef> = {
     width: 36,
     height: 36,
     monsterPool: ['bone_legionnaire', 'dune_witch', 'sand_scorpion'],
-    maxMonsters: 18,
+    maxMonsters: 38,
     connections: [
       { to: 'a2_dunes', label: 'The Sunscorched Dunes' },
       { to: 'a2_throne', label: 'The Tyrant’s Court' },
@@ -152,7 +152,7 @@ export const ZONES: Record<string, ZoneDef> = {
     width: 46,
     height: 46,
     monsterPool: ['frost_wolf', 'storm_harpy', 'frozen_revenant'],
-    maxMonsters: 18,
+    maxMonsters: 38,
     connections: [
       { to: 'hub_town', label: 'Ashport Landing' },
       { to: 'a3_citadel', label: 'The Frozen Citadel' },
@@ -170,7 +170,7 @@ export const ZONES: Record<string, ZoneDef> = {
     width: 38,
     height: 38,
     monsterPool: ['glacial_construct', 'rime_conjurer', 'frozen_revenant', 'storm_harpy'],
-    maxMonsters: 20,
+    maxMonsters: 44,
     connections: [
       { to: 'a3_peaks', label: 'Frostspire Peaks' },
       { to: 'a3_throne', label: 'The Ashen Throne' },

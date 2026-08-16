@@ -35,12 +35,33 @@ export interface FloatingText {
   text: string;
   color: string;
   life: number;
+  maxLife: number;
   vy: number;
+  crit: boolean;
+  fromPlayer: boolean;
+  drift: number;
 }
+
+const DAMAGE_TEXT_COLORS: Record<string, string> = {
+  physical: '#f2ece0',
+  fire: '#ff8a4a',
+  cold: '#8ad8ff',
+  lightning: '#ffe87a',
+  chaos: '#d08aff',
+};
 
 export interface Toast {
   text: string;
   life: number;
+}
+
+/** One-shot visual effect requests drained by the renderer each frame. */
+export interface VfxEvent {
+  kind: 'impact' | 'melee_arc' | 'nova';
+  pos: Vec2;
+  radius: number;
+  color: string;
+  facing: number;
 }
 
 export type HoverTarget =
@@ -71,6 +92,8 @@ export class Simulation {
   groundEffects: GroundEffect[] = [];
   floatingTexts: FloatingText[] = [];
   toasts: Toast[] = [];
+  /** Renderer drains this every frame. */
+  vfx: VfxEvent[] = [];
 
   lastStatMap: StatMap = {};
   inputLocked = false; // true while a full-screen modal (character create etc) owns input
@@ -153,25 +176,42 @@ export class Simulation {
       return;
     }
     if (def.monsterPool.length === 0) return;
-    for (let i = 0; i < def.maxMonsters; i++) {
-      const mid = this.rng.pick(def.monsterPool);
-      const mdef = MONSTERS[mid];
-      if (!mdef) continue;
-      let pos: Vec2 | null = null;
-      for (let tries = 0; tries < 30; tries++) {
-        const cand: Vec2 = {
-          x: this.rng.range(2, def.width - 2),
-          y: this.rng.range(2, def.height - 2),
-        };
-        if (
-          this.zone.isWalkableWorld(cand.x, cand.y, 0.5) &&
-          distance(cand, this.player.pos) > 6
-        ) {
-          pos = cand;
-          break;
+
+    // Monsters spawn in packs rather than scattered singles, so fights are group
+    // engagements the way they are in PoE2 rather than a slow trickle of duels.
+    let spawned = 0;
+    let guard = 0;
+    while (spawned < def.maxMonsters && guard < 400) {
+      guard++;
+      const center: Vec2 = {
+        x: this.rng.range(3, def.width - 3),
+        y: this.rng.range(3, def.height - 3),
+      };
+      if (!this.zone.isWalkableWorld(center.x, center.y, 0.6)) continue;
+      if (distance(center, this.player.pos) < 9) continue;
+
+      const packSize = Math.min(def.maxMonsters - spawned, 3 + this.rng.int(0, 4));
+      // A pack shares a leading monster type, with occasional mixed-in support types.
+      const primaryId = this.rng.pick(def.monsterPool);
+      for (let i = 0; i < packSize; i++) {
+        const mid = this.rng.chance(0.75) ? primaryId : this.rng.pick(def.monsterPool);
+        const mdef = MONSTERS[mid];
+        if (!mdef) continue;
+        let pos: Vec2 | null = null;
+        for (let tries = 0; tries < 14; tries++) {
+          const angle = this.rng.range(0, Math.PI * 2);
+          const radius = this.rng.range(0.6, 2.6);
+          const cand: Vec2 = { x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius };
+          if (this.zone.isWalkableWorld(cand.x, cand.y, 0.5) && distance(cand, this.player.pos) > 8) {
+            pos = cand;
+            break;
+          }
+        }
+        if (pos) {
+          this.monsters.push(new Monster(mdef, pos, def.zoneLevel));
+          spawned++;
         }
       }
-      if (pos) this.monsters.push(new Monster(mdef, pos, def.zoneLevel));
     }
   }
 
@@ -247,8 +287,25 @@ export class Simulation {
     } else {
       target.life -= result.toLife + result.toEs;
     }
-    const color = result.crit ? '#ff5040' : hit.sourceIsPlayer ? '#ffffff' : '#ff9a6a';
-    this.pushFloatText(target.pos, `${Math.round(result.totalDamage)}${result.crit ? '!' : ''}`, color);
+    const color = result.crit
+      ? '#ffd24a'
+      : hit.sourceIsPlayer
+        ? DAMAGE_TEXT_COLORS[hit.type] ?? '#f2ece0'
+        : '#ff6a5a';
+    this.pushFloatText(
+      target.pos,
+      `${Math.round(result.totalDamage)}`,
+      color,
+      result.crit,
+      hit.sourceIsPlayer,
+    );
+    this.vfx.push({
+      kind: 'impact',
+      pos: { ...target.pos },
+      radius: 0.34 + target.radius,
+      color: DAMAGE_TEXT_COLORS[hit.type] ?? '#ffd0a0',
+      facing: target.facing,
+    });
 
     for (const [type, amount] of Object.entries(result.byType)) {
       maybeApplyAilments(target, type as HitInstance['type'], amount ?? 0, maxLife, this.time, this.rng, {
@@ -272,8 +329,19 @@ export class Simulation {
     }
   }
 
-  private pushFloatText(pos: Vec2, text: string, color: string): void {
-    this.floatingTexts.push({ pos: { x: pos.x, y: pos.y - 0.6 }, text, color, life: 0.8, vy: -0.7 });
+  private pushFloatText(pos: Vec2, text: string, color: string, crit = false, fromPlayer = true): void {
+    const life = crit ? 1.15 : 0.9;
+    this.floatingTexts.push({
+      pos: { x: pos.x + this.rng.range(-0.35, 0.35), y: pos.y + this.rng.range(-0.3, 0.3) },
+      text,
+      color,
+      life,
+      maxLife: life,
+      vy: -0.9,
+      crit,
+      fromPlayer,
+      drift: this.rng.range(-1.7, 1.7),
+    });
   }
 
   private onMonsterDeath(m: Monster): void {
@@ -594,6 +662,26 @@ export class Simulation {
     if (useBlood) p.life -= castResult.effectiveManaCost;
     else p.mana -= castResult.effectiveManaCost;
 
+    const swingDir = angleTo(p.pos, aimPoint);
+    if (skill.behavior === 'melee_hit') {
+      const range = skill.range ?? 1.5;
+      this.vfx.push({
+        kind: 'melee_arc',
+        pos: { x: p.pos.x + Math.cos(swingDir) * range * 0.55, y: p.pos.y + Math.sin(swingDir) * range * 0.55 },
+        radius: Math.max(1.1, skill.radius ?? 1.5),
+        color: DAMAGE_TEXT_COLORS[skill.damageType] ?? '#ffe0b0',
+        facing: swingDir,
+      });
+    } else if (skill.behavior === 'nova') {
+      this.vfx.push({
+        kind: 'nova',
+        pos: { ...p.pos },
+        radius: skill.radius ?? 3,
+        color: DAMAGE_TEXT_COLORS[skill.damageType] ?? '#8ad8ff',
+        facing: swingDir,
+      });
+    }
+
     p.lastAttackAt = this.time;
     p.cooldowns.set(skill.id, Math.max(skill.cooldown, 0.05));
     p.attackCooldown = Math.max(0.08, castResult.castTime);
@@ -875,6 +963,8 @@ export class Simulation {
   private updateFloatingTexts(dt: number): void {
     for (const t of this.floatingTexts) {
       t.pos.y += t.vy * dt;
+      t.pos.x += t.drift * dt;
+      t.vy += dt * 1.5; // gentle arc: rise then settle
       t.life -= dt;
     }
     this.floatingTexts = this.floatingTexts.filter((t) => t.life > 0);

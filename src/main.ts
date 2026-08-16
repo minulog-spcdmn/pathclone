@@ -5,6 +5,7 @@ import { GameLoop } from './engine/Game.ts';
 import { generatePassiveTree } from './data/passiveTree.ts';
 import { Simulation } from './state/Simulation.ts';
 import { Scene3D } from './render/Scene3D.ts';
+import { Overlay } from './render/Overlay.ts';
 import { Hud } from './ui/Hud.ts';
 import { InventoryPanel } from './ui/InventoryPanel.ts';
 import { PassiveTreeUI } from './ui/PassiveTreeUI.ts';
@@ -27,6 +28,10 @@ function startGame(player: Player): void {
   canvas.id = 'game-canvas';
   container.appendChild(canvas);
 
+  const overlayCanvas = document.createElement('canvas');
+  overlayCanvas.id = 'overlay-canvas';
+  container.appendChild(overlayCanvas);
+
   const labelLayer = document.createElement('div');
   labelLayer.id = 'world-labels';
   container.appendChild(labelLayer);
@@ -36,6 +41,7 @@ function startGame(player: Player): void {
   const sim = new Simulation(player, tree, camera, input);
 
   const scene = new Scene3D(canvas, camera, labelLayer);
+  const overlay = new Overlay(overlayCanvas, camera);
   let lastZone: Zone | null = null;
 
   const hud = new Hud(container);
@@ -46,6 +52,7 @@ function startGame(player: Player): void {
 
   function resize(): void {
     scene.resize(window.innerWidth, window.innerHeight);
+    overlay.resize(window.innerWidth, window.innerHeight);
   }
   window.addEventListener('resize', resize);
   resize();
@@ -147,6 +154,7 @@ function startGame(player: Player): void {
       }
       scene.syncFrame(sim);
       scene.render();
+      overlay.draw(sim);
       canvas.style.cursor = sim.hoverTarget ? 'pointer' : 'crosshair';
 
       hud.update(sim, loop.step);

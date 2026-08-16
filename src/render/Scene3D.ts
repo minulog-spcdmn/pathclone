@@ -35,13 +35,20 @@ function disposeGroupChildren(group: THREE.Group): void {
   }
 }
 
-/** A DOM label anchored to a ground position, offset upward in screen pixels (keeps
- * it aligned with its object regardless of camera perspective). */
+/**
+ * A DOM label anchored to a real point in world space — the top of the object it
+ * belongs to — plus a small constant pixel gap. Projecting the actual 3D anchor
+ * (rather than offsetting a ground point by fixed pixels) is what keeps labels
+ * glued to their objects as perspective changes across the screen.
+ */
 interface WorldLabel {
   el: HTMLDivElement;
   ax: number;
   ay: number;
-  yOff: number;
+  /** World-space height of the object's top, in world units. */
+  anchorHeight: number;
+  /** Constant screen-space gap above that anchor, in pixels. */
+  gap: number;
 }
 
 const WEAPON_CLASS_TO_KIND: Record<string, WeaponKind> = {
@@ -87,6 +94,7 @@ export class Scene3D {
   private exitLabels: WorldLabel[] = [];
   private decoLabels: WorldLabel[] = [];
   private bossLabels = new Map<number, WorldLabel>();
+  private vfxMeshes: { mesh: THREE.Mesh; start: number; duration: number; kind: string; radius: number }[] = [];
 
   constructor(canvas: HTMLCanvasElement, camera: Camera, labelLayer: HTMLElement) {
     this.camera = camera;
@@ -178,7 +186,8 @@ export class Scene3D {
           if (deco.kind === 'stash') this.onStashClick?.(pos);
           else this.onWaypointClick?.(pos);
         });
-        this.decoLabels.push({ el, ax: pos.x, ay: pos.y, yOff: deco.kind === 'stash' ? -52 : -96 });
+        // anchor at the top of each prop: crate lid ~0.95, waypoint crystal ~1.55
+        this.decoLabels.push({ el, ax: pos.x, ay: pos.y, anchorHeight: deco.kind === 'stash' ? 0.95 : 1.55, gap: 8 });
       }
     }
 
@@ -193,7 +202,8 @@ export class Scene3D {
 
       const el = this.createLabel(exit.label, '#bdf0c8', 'exit-label');
       el.addEventListener('click', () => this.onExitClick?.(exit));
-      this.exitLabels.push({ el, ax: exit.pos.x, ay: exit.pos.y, yOff: -30 });
+      // portal ring lies flat on the ground
+      this.exitLabels.push({ el, ax: exit.pos.x, ay: exit.pos.y, anchorHeight: 0.1, gap: 10 });
     }
   }
 
@@ -270,6 +280,12 @@ export class Scene3D {
       disposeRig(rig.rig);
     }
     this.dyingRigs = [];
+    for (const v of this.vfxMeshes) {
+      this.scene.remove(v.mesh);
+      v.mesh.geometry.dispose();
+      (v.mesh.material as THREE.Material).dispose();
+    }
+    this.vfxMeshes = [];
   }
 
   private createLabel(text: string, color: string, extraClass?: string): HTMLDivElement {
@@ -383,6 +399,8 @@ export class Scene3D {
     this.syncProjectiles(sim.projectiles);
     this.syncDrops(sim.drops, now);
     this.syncGroundEffects(sim.groundEffects, now);
+    this.spawnVfx(sim, now);
+    this.updateVfx(now);
 
     for (const child of this.decorGroup.children) {
       const spin = (child as THREE.Object3D).userData.spin as THREE.Object3D | undefined;
@@ -393,6 +411,64 @@ export class Scene3D {
     }
 
     this.updateLabels(sim);
+  }
+
+  /** Turn queued one-shot combat effects from the sim into short-lived meshes. */
+  private spawnVfx(sim: Simulation, now: number): void {
+    for (const e of sim.vfx) {
+      const color = hex(e.color);
+      let mesh: THREE.Mesh;
+      let duration = 0.28;
+      if (e.kind === 'melee_arc') {
+        // a swept wedge in front of the attacker, oriented along the swing
+        const geom = new THREE.RingGeometry(e.radius * 0.35, e.radius, 20, 1, -0.9, 1.8);
+        mesh = new THREE.Mesh(
+          geom,
+          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }),
+        );
+        mesh.rotation.x = -Math.PI / 2;
+        mesh.rotation.z = -e.facing;
+        mesh.position.set(e.pos.x, 0.5, e.pos.y);
+        duration = 0.22;
+      } else if (e.kind === 'nova') {
+        mesh = new THREE.Mesh(
+          new THREE.RingGeometry(0.75, 1, 32),
+          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }),
+        );
+        mesh.rotation.x = -Math.PI / 2;
+        mesh.position.set(e.pos.x, 0.16, e.pos.y);
+        duration = 0.42;
+      } else {
+        mesh = new THREE.Mesh(
+          new THREE.SphereGeometry(e.radius * 0.55, 10, 8),
+          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending }),
+        );
+        mesh.position.set(e.pos.x, 0.85, e.pos.y);
+        duration = 0.18;
+      }
+      this.scene.add(mesh);
+      this.vfxMeshes.push({ mesh, start: now, duration, kind: e.kind, radius: e.radius });
+    }
+    sim.vfx.length = 0;
+  }
+
+  private updateVfx(now: number): void {
+    for (let i = this.vfxMeshes.length - 1; i >= 0; i--) {
+      const v = this.vfxMeshes[i];
+      const t = (now - v.start) / v.duration;
+      if (t >= 1) {
+        this.scene.remove(v.mesh);
+        v.mesh.geometry.dispose();
+        (v.mesh.material as THREE.Material).dispose();
+        this.vfxMeshes.splice(i, 1);
+        continue;
+      }
+      const mat = v.mesh.material as THREE.MeshBasicMaterial;
+      mat.opacity = (1 - t) * (v.kind === 'impact' ? 0.7 : 0.6);
+      if (v.kind === 'nova') v.mesh.scale.setScalar(0.3 + t * v.radius);
+      else if (v.kind === 'impact') v.mesh.scale.setScalar(1 + t * 1.5);
+      else v.mesh.scale.setScalar(0.85 + t * 0.35);
+    }
   }
 
   private syncProjectiles(list: Projectile[]): void {
@@ -433,6 +509,25 @@ export class Scene3D {
           new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.35, roughness: 0.4 }),
         );
         group.add(gem);
+
+        // PoE's signature rarity beam: magic and better throw a shaft of light
+        const rarity = d.item?.rarity;
+        if (rarity && rarity !== 'normal') {
+          const beam = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.16, 0.28, 5.5, 10, 1, true),
+            new THREE.MeshBasicMaterial({
+              color,
+              transparent: true,
+              opacity: rarity === 'unique' ? 0.4 : rarity === 'rare' ? 0.32 : 0.24,
+              side: THREE.DoubleSide,
+              depthWrite: false,
+              blending: THREE.AdditiveBlending,
+            }),
+          );
+          beam.position.y = 2.5;
+          group.add(beam);
+        }
+
         this.dropMeshes.set(d.id, group);
         this.scene.add(group);
 
@@ -442,7 +537,7 @@ export class Scene3D {
           'loot-label',
         );
         el.addEventListener('click', () => this.onDropClick?.(d));
-        this.dropLabels.set(d.id, { el, ax: d.pos.x, ay: d.pos.y, yOff: -30 });
+        this.dropLabels.set(d.id, { el, ax: d.pos.x, ay: d.pos.y, anchorHeight: 0.62, gap: 6 });
       }
       const bob = Math.sin(now * 3 + d.bobPhase) * 0.07;
       group.position.set(d.pos.x, 0.35 + bob, d.pos.y);
@@ -500,7 +595,7 @@ export class Scene3D {
   }
 
   private updateLabels(sim: Simulation): void {
-    for (const [, lbl] of this.dropLabels) this.placeLabel(lbl);
+    this.placeLootLabels();
     for (const lbl of this.exitLabels) this.placeLabel(lbl);
     for (const lbl of this.decoLabels) this.placeLabel(lbl);
 
@@ -511,7 +606,7 @@ export class Scene3D {
       let lbl = this.bossLabels.get(m.id);
       if (!lbl) {
         const el = this.createLabel(m.def.name, '#ffb4a8', 'world-label-boss');
-        lbl = { el, ax: m.pos.x, ay: m.pos.y, yOff: -150 };
+        lbl = { el, ax: m.pos.x, ay: m.pos.y, anchorHeight: 1.55 * 1.9 + 0.5, gap: 10 };
         this.bossLabels.set(m.id, lbl);
       }
       lbl.ax = m.pos.x;
@@ -526,14 +621,58 @@ export class Scene3D {
     }
   }
 
+  /**
+   * Loot labels are placed like PoE's: each sits above its item, but when several
+   * items land on the same spot the labels are pushed apart vertically so every
+   * name stays readable and clickable instead of piling into an unreadable stack.
+   */
+  private placeLootLabels(): void {
+    const ROW = 21;
+    const placed: { x1: number; x2: number; y: number }[] = [];
+    const entries: { lbl: WorldLabel; x: number; y: number; w: number }[] = [];
+
+    for (const [, lbl] of this.dropLabels) {
+      const s = this.camera.worldToScreen(lbl.ax, lbl.ay, lbl.anchorHeight);
+      if (!s || s.x < -80 || s.x > this.camera.viewW + 80 || s.y < -60 || s.y > this.camera.viewH + 120) {
+        lbl.el.style.display = 'none';
+        continue;
+      }
+      lbl.el.style.display = 'block';
+      entries.push({ lbl, x: s.x, y: s.y - lbl.gap, w: lbl.el.offsetWidth || 90 });
+    }
+
+    // nearest-to-camera first, so closer items keep their natural position
+    entries.sort((a, b) => b.y - a.y);
+
+    for (const e of entries) {
+      const x1 = e.x - e.w / 2;
+      const x2 = e.x + e.w / 2;
+      let y = e.y;
+      let moved = true;
+      let guard = 0;
+      while (moved && guard < 24) {
+        moved = false;
+        guard++;
+        for (const p of placed) {
+          if (x1 < p.x2 + 4 && x2 > p.x1 - 4 && Math.abs(y - p.y) < ROW) {
+            y = p.y - ROW;
+            moved = true;
+          }
+        }
+      }
+      placed.push({ x1, x2, y });
+      e.lbl.el.style.transform = `translate(-50%, -100%) translate(${Math.round(e.x)}px, ${Math.round(y)}px)`;
+    }
+  }
+
   private placeLabel(lbl: WorldLabel): void {
-    const s = this.camera.worldToScreen(lbl.ax, lbl.ay, 0);
+    const s = this.camera.worldToScreen(lbl.ax, lbl.ay, lbl.anchorHeight);
     if (!s || s.x < -80 || s.x > this.camera.viewW + 80 || s.y < -60 || s.y > this.camera.viewH + 120) {
       lbl.el.style.display = 'none';
       return;
     }
     lbl.el.style.display = 'block';
-    lbl.el.style.transform = `translate(-50%, -100%) translate(${Math.round(s.x)}px, ${Math.round(s.y + lbl.yOff)}px)`;
+    lbl.el.style.transform = `translate(-50%, -100%) translate(${Math.round(s.x)}px, ${Math.round(s.y - lbl.gap)}px)`;
   }
 
   render(): void {

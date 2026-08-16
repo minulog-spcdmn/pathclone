@@ -312,7 +312,7 @@ export function updateRig(
 
   // brief white flash when hit
   const hitElapsed = now - lastHitAt;
-  const flash = hitElapsed >= 0 && hitElapsed < 0.12 ? 0.65 : 0;
+  const flash = hitElapsed >= 0 && hitElapsed < 0.1 ? 0.3 * (1 - hitElapsed / 0.1) : 0;
   for (const m of rig.mats) {
     m.emissive.setScalar(flash);
   }

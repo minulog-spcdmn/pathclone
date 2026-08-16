@@ -12,6 +12,13 @@ export class Camera {
   viewH = 0;
   /** Offset from focus point to camera position, in world units. */
   offset = new THREE.Vector3(0, 12.5, 8.75);
+  /**
+   * World height the camera aims at, relative to the focus point's ground position.
+   * Negative values raise the character on screen, which compensates for the bottom
+   * HUD so the character reads as centered in the visible playfield rather than in
+   * the raw viewport rectangle.
+   */
+  aimHeight = -0.62;
   private raycaster = new THREE.Raycaster();
   private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private focus = new THREE.Vector3(0, 0, 0);
@@ -30,7 +37,7 @@ export class Camera {
   centerOn(x: number, y: number): void {
     this.focus.set(x, 0, y);
     this.three.position.set(this.focus.x + this.offset.x, this.offset.y, this.focus.z + this.offset.z);
-    this.three.lookAt(this.focus.x, 0.9, this.focus.z);
+    this.three.lookAt(this.focus.x, this.aimHeight, this.focus.z);
   }
 
   /** Same as centerOn — kept for call-site clarity on zone changes. */
