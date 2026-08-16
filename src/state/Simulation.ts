@@ -1,0 +1,789 @@
+import { Camera } from '../engine/Camera.ts';
+import { Input } from '../engine/Input.ts';
+import { Rng, hashSeed } from '../engine/Random.ts';
+import type { Vec2 } from '../engine/Vec2.ts';
+import { angleTo, distance } from '../engine/Vec2.ts';
+import { Player, xpForLevel } from '../entities/Player.ts';
+import { Monster } from '../entities/Monster.ts';
+import { Minion, MINIONS } from '../entities/Minion.ts';
+import { Projectile } from '../entities/Projectile.ts';
+import type { HitInstance } from '../entities/Projectile.ts';
+import { ItemDrop } from '../entities/ItemDrop.ts';
+import { GroundEffect } from '../entities/GroundEffect.ts';
+import type { Entity, Team } from '../entities/Entity.ts';
+import { ZONES } from '../data/zones.ts';
+import { generateZone } from '../world/ZoneGenerator.ts';
+import type { Zone } from '../world/Zone.ts';
+import { MONSTERS } from '../data/monsters.ts';
+import { SKILLS } from '../data/skills.ts';
+import type { PassiveTree } from '../data/passiveTree.ts';
+import { ASCENDANCY_NODES } from '../data/ascendancyTree.ts';
+import { mergeStats, stat } from '../core/types.ts';
+import type { StatMap } from '../core/types.ts';
+import { computeDerived } from '../core/stats.ts';
+import type { DefenseProfile } from '../systems/Combat.ts';
+import { resolveHit } from '../systems/Combat.ts';
+import { maybeApplyAilments, tickStatusEffects } from '../systems/StatusEffects.ts';
+import { castSkill, getSkillManaCost } from '../systems/SkillExecution.ts';
+import type { SkillContext } from '../systems/SkillExecution.ts';
+import { rollMonsterLoot } from '../systems/Loot.ts';
+import { rollRarity, generateItem } from '../systems/ItemGen.ts';
+import { ITEM_BASES } from '../data/items.ts';
+
+export interface FloatingText {
+  pos: Vec2;
+  text: string;
+  color: string;
+  life: number;
+  vy: number;
+}
+
+export interface Toast {
+  text: string;
+  life: number;
+}
+
+export class Simulation {
+  player: Player;
+  tree: PassiveTree;
+  zone: Zone;
+  camera: Camera;
+  input: Input;
+  rng: Rng;
+  time = 0;
+
+  monsters: Monster[] = [];
+  minions: Minion[] = [];
+  projectiles: Projectile[] = [];
+  drops: ItemDrop[] = [];
+  groundEffects: GroundEffect[] = [];
+  floatingTexts: FloatingText[] = [];
+  toasts: Toast[] = [];
+
+  lastStatMap: StatMap = {};
+  private zoneChangeGraceTimer = 0;
+  inputLocked = false; // true while a full-screen modal (character create etc) owns input
+
+  onLevelUp?: (levels: number) => void;
+  onZoneChange?: (zoneId: string) => void;
+  onDeath?: () => void;
+
+  private skillCtx: SkillContext;
+
+  constructor(player: Player, tree: PassiveTree, camera: Camera, input: Input) {
+    this.player = player;
+    this.tree = tree;
+    this.camera = camera;
+    this.input = input;
+    this.rng = new Rng(hashSeed(`${player.classId}_${Date.now()}`));
+    this.zone = generateZone(ZONES[player.currentZoneId] ?? ZONES.hub_town, this.rng.int(0, 1e9));
+    this.player.pos = { ...this.zone.spawnPoint };
+    this.camera.centerOn(this.player.pos.x, this.player.pos.y);
+
+    this.skillCtx = {
+      now: 0,
+      rng: this.rng,
+      spawnProjectile: (pos, vel, hit, team, opts) => {
+        this.projectiles.push(new Projectile(pos, vel, hit, team, opts));
+      },
+      spawnGroundEffect: (pos, radius, hit, delay, duration, tick, color) => {
+        this.groundEffects.push(new GroundEffect(pos, radius, hit, delay, duration, tick, color));
+      },
+      spawnMinion: (summonId, pos, ownerId, statMult) => {
+        this.spawnMinion(summonId, pos, ownerId, statMult);
+      },
+      damageInRadius: (center, radius, hitTeam, hit) => {
+        this.damageInRadius(center, radius, hitTeam, hit);
+      },
+      isWalkable: (pos, radius) => this.zone.isWalkableWorld(pos.x, pos.y, radius),
+    };
+
+    this.spawnZoneMonsters();
+    this.zoneChangeGraceTimer = 1.2;
+  }
+
+  changeZone(zoneId: string, arriveNear?: string): void {
+    const def = ZONES[zoneId];
+    if (!def) return;
+    this.zone = generateZone(def, this.rng.int(0, 1e9));
+    this.player.currentZoneId = zoneId;
+    this.player.wayointsUnlocked.add(zoneId);
+    if (arriveNear) {
+      const exit = this.zone.exits.find((e) => e.toZoneId === arriveNear);
+      this.player.pos = exit ? { ...exit.pos } : { ...this.zone.spawnPoint };
+    } else {
+      this.player.pos = { ...this.zone.spawnPoint };
+    }
+    this.monsters = [];
+    this.minions = [];
+    this.projectiles = [];
+    this.drops = [];
+    this.groundEffects = [];
+    this.spawnZoneMonsters();
+    this.camera.centerOn(this.player.pos.x, this.player.pos.y);
+    this.zoneChangeGraceTimer = 1.2;
+    this.onZoneChange?.(zoneId);
+  }
+
+  private spawnZoneMonsters(): void {
+    const def = this.zone.def;
+    if (def.kind === 'boss' && def.bossId) {
+      const mdef = MONSTERS[def.bossId];
+      if (mdef) {
+        const pos: Vec2 = { x: this.zone.spawnPoint.x + 4, y: this.zone.spawnPoint.y + 4 };
+        this.monsters.push(new Monster(mdef, pos, def.zoneLevel));
+      }
+      return;
+    }
+    if (def.monsterPool.length === 0) return;
+    for (let i = 0; i < def.maxMonsters; i++) {
+      const mid = this.rng.pick(def.monsterPool);
+      const mdef = MONSTERS[mid];
+      if (!mdef) continue;
+      let pos: Vec2 | null = null;
+      for (let tries = 0; tries < 30; tries++) {
+        const cand: Vec2 = {
+          x: this.rng.range(2, def.width - 2),
+          y: this.rng.range(2, def.height - 2),
+        };
+        if (
+          this.zone.isWalkableWorld(cand.x, cand.y, 0.5) &&
+          distance(cand, this.player.pos) > 6
+        ) {
+          pos = cand;
+          break;
+        }
+      }
+      if (pos) this.monsters.push(new Monster(mdef, pos, def.zoneLevel));
+    }
+  }
+
+  private spawnMinion(summonId: string, pos: Vec2, ownerId: number, statMult: { life: number; damage: number }): void {
+    const def = MINIONS[summonId];
+    if (!def) return;
+    const cap = 3 + Math.round(stat(this.lastStatMap, 'minionLimit'));
+    const owned = this.minions.filter((m) => m.ownerId === ownerId && m.def.id === summonId);
+    if (owned.length >= cap) {
+      const oldest = owned[0];
+      oldest.dead = true;
+    }
+    this.minions.push(new Minion(def, pos, ownerId, statMult));
+  }
+
+  // ---- combat helpers exposed to skills/AI ----
+  damageInRadius(center: Vec2, radius: number, hitTeam: Team, hit: HitInstance): void {
+    const targets: (Monster | Minion | Player)[] = [];
+    if (hitTeam === 'enemy') targets.push(...this.monsters.filter((m) => !m.dead));
+    else {
+      targets.push(...this.minions.filter((m) => !m.dead));
+      if (!this.player.dead) targets.push(this.player);
+    }
+    for (const t of targets) {
+      if (distance(t.pos, center) <= radius + t.radius) {
+        this.applyHitToEntity(t, hit);
+      }
+    }
+  }
+
+  private defenseProfileFor(target: Monster | Minion | Player): DefenseProfile {
+    if (target instanceof Player) {
+      const d = target.derived;
+      return {
+        armor: d.armor,
+        evasion: d.evasion,
+        fireRes: d.fireRes,
+        coldRes: d.coldRes,
+        lightningRes: d.lightningRes,
+        chaosRes: d.chaosRes,
+        dodgeChance: stat(this.lastStatMap, 'dodgeChance'),
+        chaosInoculation: d.chaosInoculation,
+      };
+    }
+    if (target instanceof Monster) {
+      return {
+        armor: target.def.armor,
+        evasion: target.def.evasion,
+        fireRes: target.def.fireRes,
+        coldRes: target.def.coldRes,
+        lightningRes: target.def.lightningRes,
+        chaosRes: target.def.chaosRes,
+        dodgeChance: 0,
+        chaosInoculation: false,
+      };
+    }
+    return { armor: 0, evasion: 20, fireRes: 0, coldRes: 0, lightningRes: 0, chaosRes: 0, dodgeChance: 0, chaosInoculation: false };
+  }
+
+  private applyHitToEntity(target: Monster | Minion | Player, hit: HitInstance): void {
+    if (target instanceof Player && target.isDodging) return;
+    const currentEs = target instanceof Player ? target.energyShield : 0;
+    const maxLife = target instanceof Player ? target.derived.maxLife : (target as Monster | Minion).maxLife;
+    const result = resolveHit(hit, this.defenseProfileFor(target), currentEs, this.rng);
+    if (!result.landed) {
+      this.pushFloatText(target.pos, result.dodged ? 'Dodged' : 'Evaded', '#aaaaaa');
+      return;
+    }
+    if (target instanceof Player) {
+      target.energyShield -= result.toEs;
+      target.life -= result.toLife;
+    } else {
+      target.life -= result.toLife + result.toEs;
+    }
+    const color = result.crit ? '#ff5040' : hit.sourceIsPlayer ? '#ffffff' : '#ff9a6a';
+    this.pushFloatText(target.pos, `${Math.round(result.totalDamage)}${result.crit ? '!' : ''}`, color);
+
+    for (const [type, amount] of Object.entries(result.byType)) {
+      maybeApplyAilments(target, type as HitInstance['type'], amount ?? 0, maxLife, this.time, this.rng, {
+        noAilments: hit.tags.includes('noAilments'),
+      });
+    }
+
+    if (hit.leechPercent && hit.sourceIsPlayer) {
+      this.player.life = Math.min(this.player.derived.maxLife, this.player.life + result.leech);
+    }
+
+    if (target instanceof Monster) {
+      target.aiState = 'aggro';
+      target.target = this.player;
+    }
+
+    if (target.life <= 0 && !target.dead) {
+      target.dead = true;
+      if (target instanceof Monster) this.onMonsterDeath(target);
+      if (target instanceof Player) this.onPlayerDeath();
+    }
+  }
+
+  private pushFloatText(pos: Vec2, text: string, color: string): void {
+    this.floatingTexts.push({ pos: { x: pos.x, y: pos.y - 0.6 }, text, color, life: 0.8, vy: -0.7 });
+  }
+
+  private onMonsterDeath(m: Monster): void {
+    this.player.killCount++;
+    const levels = this.player.gainXp(m.def.xpValue);
+    if (levels > 0) {
+      this.player.life = this.player.derived.maxLife;
+      this.player.mana = this.player.derived.maxMana;
+      this.onLevelUp?.(levels);
+      this.maybeGrantAscendancyPoint();
+    }
+    const loot = rollMonsterLoot(m.def, m.zoneLevel, this.rng);
+    this.player.gold += loot.gold;
+    for (const [k, v] of Object.entries(loot.currency)) {
+      (this.player.currencies as unknown as Record<string, number>)[k] += v ?? 0;
+    }
+    for (const item of loot.items) {
+      const drop = new ItemDrop(m.pos, item, this.time);
+      this.drops.push(drop);
+    }
+    this.toasts.push({ text: `${m.def.name} slain (+${m.def.xpValue} xp, +${loot.gold}g)`, life: 2 });
+  }
+
+  private maybeGrantAscendancyPoint(): void {
+    const milestones = [10, 20, 30, 40, 50, 60];
+    const idx = milestones.indexOf(this.player.level);
+    if (idx >= 0 && this.player.ascendancyId) {
+      this.player.ascendancyPoints = Math.min(6, idx + 1);
+    }
+  }
+
+  private onPlayerDeath(): void {
+    this.player.deaths++;
+    const lost = Math.round((this.player.xp - xpForLevel(this.player.level)) * 0.05);
+    this.player.xp = Math.max(xpForLevel(this.player.level), this.player.xp - lost);
+    this.changeZone('hub_town');
+    this.player.dead = false;
+    this.player.life = this.player.derived.maxLife;
+    this.player.mana = this.player.derived.maxMana;
+    this.player.energyShield = this.player.derived.maxEnergyShield;
+    this.onDeath?.();
+  }
+
+  // ---- main loop ----
+  update(dt: number): void {
+    this.time += dt;
+    this.skillCtx.now = this.time;
+    if (this.zoneChangeGraceTimer > 0) this.zoneChangeGraceTimer -= dt;
+    this.refreshDerivedStats();
+
+    if (!this.inputLocked) {
+      this.handlePlayerInput(dt);
+    }
+    this.tickPlayerVitals(dt);
+    this.updateProjectiles(dt);
+    this.updateGroundEffects(dt);
+    this.updateMonsters(dt);
+    this.updateMinions(dt);
+    this.updateDrops();
+    this.updateFloatingTexts(dt);
+    this.updateToasts(dt);
+    this.checkZoneExits();
+
+    this.monsters = this.monsters.filter((m) => !m.dead);
+    this.minions = this.minions.filter((m) => !m.dead);
+    this.projectiles = this.projectiles.filter((p) => !p.dead);
+    this.groundEffects = this.groundEffects.filter((g) => !g.dead);
+
+    this.camera.centerOn(this.player.pos.x, this.player.pos.y);
+    this.input.endFrame();
+  }
+
+  private refreshDerivedStats(): void {
+    const treeMaps: StatMap[] = [];
+    for (const nodeId of this.player.allocatedNodes) {
+      const node = this.tree.nodes.get(nodeId);
+      if (node) treeMaps.push(node.stats);
+    }
+    if (this.player.ascendancyId) {
+      const nodes = ASCENDANCY_NODES[this.player.ascendancyId] ?? [];
+      for (const n of nodes) {
+        if (this.player.allocatedAscNodes.has(n.id)) treeMaps.push(n.stats);
+      }
+    }
+    const map = mergeStats(this.player.equipmentStats(), this.player.buffStats(), ...treeMaps);
+    this.lastStatMap = map;
+    const def = this.player.classDef;
+    const derived = computeDerived(this.player.level, def.baseAttrs, def.baseResources, map);
+    this.player.derived = derived;
+    this.player.life = Math.min(this.player.life, derived.maxLife);
+    this.player.mana = Math.min(this.player.mana, derived.maxMana);
+    this.player.energyShield = Math.min(this.player.energyShield, derived.maxEnergyShield);
+  }
+
+  private handlePlayerInput(dt: number): void {
+    const p = this.player;
+    if (p.attackCooldown > 0) p.attackCooldown -= dt;
+    for (const [id, cd] of p.cooldowns) {
+      if (cd > 0) p.cooldowns.set(id, cd - dt);
+    }
+    if (p.dodgeCooldown > 0) p.dodgeCooldown -= dt;
+
+    if (p.isDodging) {
+      p.dodgeTimer -= dt;
+      this.attemptMove(p, p.dodgeDir.x * 9 * dt, p.dodgeDir.y * 9 * dt);
+      if (p.dodgeTimer <= 0) p.isDodging = false;
+    } else {
+      let mx = 0;
+      let my = 0;
+      if (this.input.isDown('KeyW') || this.input.isDown('ArrowUp')) my -= 1;
+      if (this.input.isDown('KeyS') || this.input.isDown('ArrowDown')) my += 1;
+      if (this.input.isDown('KeyA') || this.input.isDown('ArrowLeft')) mx -= 1;
+      if (this.input.isDown('KeyD') || this.input.isDown('ArrowRight')) mx += 1;
+      const moving = mx !== 0 || my !== 0;
+      if (moving) {
+        const len = Math.hypot(mx, my);
+        mx /= len;
+        my /= len;
+        p.lastMoveDir = { x: mx, y: my };
+      }
+      if (this.input.wasPressed('Space') && p.dodgeCooldown <= 0) {
+        p.isDodging = true;
+        p.dodgeTimer = 0.26;
+        p.dodgeCooldown = 0.9;
+        p.dodgeDir = moving ? { x: mx, y: my } : p.lastMoveDir;
+      } else {
+        const status = tickStatusEffects(p, this.time, dt);
+        if (!status.frozen) {
+          const speed = 3.3 * p.derived.movementSpeed * (1 - Math.min(80, status.chillPercent) / 100);
+          if (moving) this.attemptMove(p, mx * speed * dt, my * speed * dt);
+        }
+        this.applyDotDamage(p, status.dotDamage);
+      }
+    }
+
+    const mouseWorld = this.camera.screenToWorld(this.input.mouseX, this.input.mouseY);
+    p.facing = angleTo(p.pos, mouseWorld);
+
+    if (!p.isDodging) {
+      const held = [
+        this.input.mouseDown || this.input.isDown('Digit1'),
+        this.input.mouseRightDown || this.input.isDown('Digit2'),
+        this.input.isDown('Digit3'),
+        this.input.isDown('Digit4'),
+      ];
+      for (let i = 0; i < 4; i++) {
+        if (held[i]) this.tryCastSlot(i, mouseWorld);
+      }
+    }
+
+    for (let i = 0; i < 4; i++) {
+      const key = `Digit${5 + i}`;
+      if (this.input.wasPressed(key)) this.useFlask(i);
+    }
+  }
+
+  private attemptMove(entity: Entity, dx: number, dy: number): void {
+    const nx = entity.pos.x + dx;
+    if (this.zone.isWalkableWorld(nx, entity.pos.y, entity.radius)) entity.pos.x = nx;
+    const ny = entity.pos.y + dy;
+    if (this.zone.isWalkableWorld(entity.pos.x, ny, entity.radius)) entity.pos.y = ny;
+  }
+
+  private tryCastSlot(index: number, aimPoint: Vec2): void {
+    const p = this.player;
+    const slot = p.skillSlots[index];
+    if (!slot.skillId) return;
+    const skill = SKILLS[slot.skillId];
+    if (!skill || p.level < skill.levelReq) return;
+    if ((p.cooldowns.get(skill.id) ?? 0) > 0) return;
+    if (p.attackCooldown > 0) return;
+
+    const useBlood = stat(this.lastStatMap, 'keystoneBloodMagic') > 0;
+    const cost = getSkillManaCost(skill, slot.supportIds);
+    if (useBlood) {
+      if (p.life <= cost) return;
+    } else if (p.mana < cost) {
+      return;
+    }
+
+    if (skill.behavior === 'dash') {
+      const dist = skill.dashDistance ?? 4;
+      const dir = angleTo(p.pos, aimPoint);
+      let travelled = 0;
+      const stepSize = 0.3;
+      while (travelled < dist) {
+        const step = Math.min(stepSize, dist - travelled);
+        const nx = p.pos.x + Math.cos(dir) * step;
+        const ny = p.pos.y + Math.sin(dir) * step;
+        if (!this.zone.isWalkableWorld(nx, ny, p.radius)) break;
+        p.pos.x = nx;
+        p.pos.y = ny;
+        travelled += step;
+      }
+    }
+
+    if (skill.behavior === 'self_buff' && skill.buffStats) {
+      p.buffs.push({ id: skill.id, stats: skill.buffStats, expiresAt: this.time + (skill.buffDuration ?? 4), label: skill.name });
+    }
+
+    const castResult = castSkill(this.skillCtx, p, aimPoint, skill, slot.supportIds, this.lastStatMap, p.derived, 'player');
+
+    if (useBlood) p.life -= castResult.effectiveManaCost;
+    else p.mana -= castResult.effectiveManaCost;
+
+    p.cooldowns.set(skill.id, Math.max(skill.cooldown, 0.05));
+    p.attackCooldown = Math.max(0.08, castResult.castTime);
+  }
+
+  private useFlask(slotIndex: number): void {
+    const key = (`flask${slotIndex + 1}`) as 'flask1' | 'flask2' | 'flask3' | 'flask4';
+    const item = this.player.equipment[key];
+    if (!item) return;
+    const baseDef = ITEM_BASES[item.baseId];
+    if (!baseDef) return;
+    const cdKey = key;
+    if ((this.player.flaskCooldowns.get(cdKey) ?? 0) > 0) return;
+    const duration = baseDef.flaskDuration ?? 3;
+    if (baseDef.flaskKind === 'life' && baseDef.flaskLife) {
+      this.player.flaskHeals.push({ type: 'life', remaining: duration, perSecond: baseDef.flaskLife / duration });
+    } else if (baseDef.flaskKind === 'mana' && baseDef.flaskMana) {
+      this.player.flaskHeals.push({ type: 'mana', remaining: duration, perSecond: baseDef.flaskMana / duration });
+    } else if (baseDef.flaskKind === 'utility' && baseDef.flaskUtilityStats) {
+      this.player.buffs.push({ id: `flask_${key}`, stats: baseDef.flaskUtilityStats, expiresAt: this.time + duration, label: item.name });
+    }
+    this.player.flaskCooldowns.set(cdKey, duration);
+    this.toasts.push({ text: `Used ${item.name}`, life: 1.5 });
+  }
+
+  private applyDotDamage(p: Player, dot: number): void {
+    if (dot <= 0) return;
+    p.life -= dot;
+    if (p.life <= 0 && !p.dead) {
+      p.dead = true;
+      this.onPlayerDeath();
+    }
+  }
+
+  private tickPlayerVitals(dt: number): void {
+    const p = this.player;
+    if (!p.isDodging) {
+      p.life = Math.min(p.derived.maxLife, p.life + p.derived.lifeRegen * dt);
+      p.mana = Math.min(p.derived.maxMana, p.mana + p.derived.manaRegen * dt);
+    }
+    for (const [k, cd] of p.flaskCooldowns) {
+      if (cd > 0) p.flaskCooldowns.set(k, cd - dt);
+    }
+    for (let i = p.flaskHeals.length - 1; i >= 0; i--) {
+      const heal = p.flaskHeals[i];
+      const amount = heal.perSecond * dt;
+      if (heal.type === 'life') p.life = Math.min(p.derived.maxLife, p.life + amount);
+      else p.mana = Math.min(p.derived.maxMana, p.mana + amount);
+      heal.remaining -= dt;
+      if (heal.remaining <= 0) p.flaskHeals.splice(i, 1);
+    }
+    p.buffs = p.buffs.filter((b) => b.expiresAt > this.time);
+  }
+
+  private updateProjectiles(dt: number): void {
+    for (const proj of this.projectiles) {
+      if (proj.dead) continue;
+      proj.pos.x += proj.velocity.x * dt;
+      proj.pos.y += proj.velocity.y * dt;
+      proj.life -= dt;
+      if (proj.life <= 0) {
+        proj.dead = true;
+        continue;
+      }
+      if (!this.zone.isWalkableWorld(proj.pos.x, proj.pos.y, 0.05)) {
+        proj.dead = true;
+        continue;
+      }
+      const targets: (Monster | Minion | Player)[] =
+        proj.team === 'player'
+          ? this.monsters.filter((m) => !m.dead)
+          : [...this.minions.filter((m) => !m.dead), ...(this.player.dead ? [] : [this.player])];
+      for (const t of targets) {
+        if (proj.hitEntities.has(t.id)) continue;
+        if (distance(t.pos, proj.pos) <= proj.radius + t.radius) {
+          proj.hitEntities.add(t.id);
+          this.applyHitToEntity(t, proj.hit);
+          if (proj.pierceRemaining > 0) {
+            proj.pierceRemaining--;
+          } else if (proj.chainRemaining > 0) {
+            proj.chainRemaining--;
+            const next = this.findNearestOtherTarget(targets, proj.pos, proj.hitEntities);
+            if (next) {
+              const dx = next.pos.x - proj.pos.x;
+              const dy = next.pos.y - proj.pos.y;
+              const len = Math.hypot(dx, dy) || 1;
+              const speed = Math.max(len, 8);
+              proj.velocity = { x: (dx / len) * speed, y: (dy / len) * speed };
+            } else {
+              proj.dead = true;
+            }
+          } else {
+            proj.dead = true;
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  private findNearestOtherTarget(targets: (Monster | Minion | Player)[], from: Vec2, exclude: Set<number>): (Monster | Minion | Player) | null {
+    let best: (Monster | Minion | Player) | null = null;
+    let bestDist = Infinity;
+    for (const t of targets) {
+      if (exclude.has(t.id)) continue;
+      const d = distance(t.pos, from);
+      if (d < bestDist) {
+        bestDist = d;
+        best = t;
+      }
+    }
+    return best;
+  }
+
+  private updateGroundEffects(dt: number): void {
+    for (const g of this.groundEffects) {
+      g.elapsed += dt;
+      if (g.elapsed < g.delay) continue;
+      if (g.elapsed > g.delay + g.duration) {
+        g.dead = true;
+        continue;
+      }
+      g.tickTimer -= dt;
+      if (g.tickTimer <= 0) {
+        g.tickTimer = g.tickInterval;
+        const hitTeam: Team = g.hit.sourceIsPlayer ? 'enemy' : 'player';
+        this.damageInRadius(g.pos, g.radius, hitTeam, g.hit);
+      }
+    }
+  }
+
+  private updateMonsters(dt: number): void {
+    for (const m of this.monsters) {
+      if (m.dead) continue;
+      const status = tickStatusEffects(m, this.time, dt);
+      if (status.dotDamage > 0) {
+        m.life -= status.dotDamage;
+        this.pushFloatText(m.pos, `${Math.round(status.dotDamage)}`, '#ff8844');
+        if (m.life <= 0 && !m.dead) {
+          m.dead = true;
+          this.onMonsterDeath(m);
+          continue;
+        }
+      }
+      if (status.frozen) continue;
+
+      const speedMult = 1 - Math.min(80, status.chillPercent) / 100;
+      this.updateMonsterAI(m, dt, speedMult);
+    }
+  }
+
+  private updateMonsterAI(m: Monster, dt: number, speedMult: number): void {
+    const distToPlayer = distance(m.pos, this.player.pos);
+    if (m.aiState === 'idle') {
+      if (distToPlayer <= m.def.aggroRadius && !this.player.dead) {
+        m.aiState = 'aggro';
+        m.target = this.player;
+      }
+      return;
+    }
+    if (this.player.dead) {
+      m.aiState = 'idle';
+      m.target = null;
+      return;
+    }
+    m.facing = angleTo(m.pos, this.player.pos);
+    if (distToPlayer > m.def.attackRange) {
+      if (distToPlayer > m.def.aggroRadius * 2.2) {
+        m.aiState = 'idle';
+        return;
+      }
+      const dir = angleTo(m.pos, this.player.pos);
+      const speed = m.def.moveSpeed * speedMult;
+      this.attemptMove(m, Math.cos(dir) * speed * dt, Math.sin(dir) * speed * dt);
+    } else {
+      m.attackTimer -= dt;
+      if (m.attackTimer <= 0) {
+        m.attackTimer = m.def.attackCooldown;
+        this.monsterAttack(m);
+      }
+    }
+  }
+
+  private monsterAttack(m: Monster): void {
+    const hit: HitInstance = {
+      min: m.damageMin,
+      max: m.damageMax,
+      type: m.def.damageType,
+      critChance: 0.05,
+      critMultiplier: 1.5,
+      accuracy: 150 + m.zoneLevel * 4,
+      sourceIsPlayer: false,
+      ownerId: m.id,
+      tags: ['attack'],
+    };
+    if (m.def.behavior === 'melee') {
+      this.damageInRadius(m.pos, m.def.attackRange * 0.9, 'player', hit);
+    } else {
+      const speed = m.def.projectileSpeed ?? 10;
+      const dir = angleTo(m.pos, this.player.pos);
+      this.projectiles.push(
+        new Projectile(
+          { ...m.pos },
+          { x: Math.cos(dir) * speed, y: Math.sin(dir) * speed },
+          hit,
+          'enemy',
+          { color: '#ff6a6a' },
+        ),
+      );
+    }
+  }
+
+  private updateMinions(dt: number): void {
+    for (const minion of this.minions) {
+      if (minion.dead) continue;
+      const status = tickStatusEffects(minion, this.time, dt);
+      if (status.dotDamage > 0) {
+        minion.life -= status.dotDamage;
+        if (minion.life <= 0) {
+          minion.dead = true;
+          continue;
+        }
+      }
+      if (status.frozen) continue;
+
+      let target = minion.target && !minion.target.dead ? minion.target : null;
+      if (!target || distance(minion.pos, target.pos) > 12) {
+        target = this.findNearestMonster(minion.pos, 9);
+      }
+      minion.target = target;
+
+      if (target) {
+        minion.facing = angleTo(minion.pos, target.pos);
+        const d = distance(minion.pos, target.pos);
+        if (d > minion.def.attackRange) {
+          const dir = angleTo(minion.pos, target.pos);
+          this.attemptMove(minion, Math.cos(dir) * minion.def.moveSpeed * dt, Math.sin(dir) * minion.def.moveSpeed * dt);
+        } else {
+          minion.attackTimer -= dt;
+          if (minion.attackTimer <= 0) {
+            minion.attackTimer = minion.def.attackCooldown;
+            const hit: HitInstance = {
+              min: minion.damageMin,
+              max: minion.damageMax,
+              type: 'physical',
+              critChance: 0.05,
+              critMultiplier: 1.5,
+              accuracy: 200,
+              sourceIsPlayer: false,
+              ownerId: minion.id,
+              tags: ['attack', 'minion'],
+            };
+            this.damageInRadius(minion.pos, minion.def.attackRange, 'enemy', hit);
+          }
+        }
+      } else {
+        const d = distance(minion.pos, this.player.pos);
+        if (d > 2.2) {
+          const dir = angleTo(minion.pos, this.player.pos);
+          this.attemptMove(minion, Math.cos(dir) * minion.def.moveSpeed * dt, Math.sin(dir) * minion.def.moveSpeed * dt);
+        }
+      }
+    }
+  }
+
+  private findNearestMonster(from: Vec2, maxDist: number): Monster | null {
+    let best: Monster | null = null;
+    let bestDist = maxDist;
+    for (const m of this.monsters) {
+      if (m.dead) continue;
+      const d = distance(from, m.pos);
+      if (d < bestDist) {
+        bestDist = d;
+        best = m;
+      }
+    }
+    return best;
+  }
+
+  private updateDrops(): void {
+    for (const drop of this.drops) {
+      if (drop.dead) continue;
+      if (distance(drop.pos, this.player.pos) < 0.9) {
+        if (drop.item) {
+          if (this.player.inventory.hasSpaceFor(drop.item)) {
+            this.player.inventory.addItem(drop.item);
+            this.toasts.push({ text: `Picked up ${drop.item.name}`, life: 1.6 });
+            drop.dead = true;
+          }
+        } else {
+          this.player.gold += drop.gold;
+          drop.dead = true;
+        }
+      }
+    }
+    this.drops = this.drops.filter((d) => !d.dead);
+  }
+
+  private updateFloatingTexts(dt: number): void {
+    for (const t of this.floatingTexts) {
+      t.pos.y += t.vy * dt;
+      t.life -= dt;
+    }
+    this.floatingTexts = this.floatingTexts.filter((t) => t.life > 0);
+  }
+
+  private updateToasts(dt: number): void {
+    for (const t of this.toasts) t.life -= dt;
+    this.toasts = this.toasts.filter((t) => t.life > 0);
+  }
+
+  private checkZoneExits(): void {
+    if (this.zoneChangeGraceTimer > 0) return;
+    for (const exit of this.zone.exits) {
+      if (distance(this.player.pos, exit.pos) < exit.radius) {
+        this.changeZone(exit.toZoneId, this.zone.def.id);
+        return;
+      }
+    }
+  }
+
+  rollTestDrop(): void {
+    const rarity = rollRarity(this.rng, 0);
+    const item = generateItem('one_hand_sword_t1', this.zone.def.zoneLevel, rarity, this.rng);
+    this.drops.push(new ItemDrop(this.player.pos, item, this.time));
+  }
+}
