@@ -51,11 +51,22 @@ function startGame(player: Player): void {
   const waypointPanel = new WaypointPanel(container);
 
   function resize(): void {
-    scene.resize(window.innerWidth, window.innerHeight);
-    overlay.resize(window.innerWidth, window.innerHeight);
+    // Measure the actual container box rather than trusting window.innerWidth/innerHeight —
+    // those can diverge from the real rendered area when the page is embedded, scrolled, or
+    // sized by something other than the raw browser viewport.
+    const rect = container.getBoundingClientRect();
+    const w = Math.max(1, Math.round(rect.width));
+    const h = Math.max(1, Math.round(rect.height));
+    scene.resize(w, h, hud.getBottomHudHeight());
+    overlay.resize(w, h);
   }
   window.addEventListener('resize', resize);
+  const resizeObserver = new ResizeObserver(resize);
+  resizeObserver.observe(container);
   resize();
+  // Re-measure once more after layout settles (fonts/first paint can shift the HUD's real
+  // height right after mount), so the playfield fit is correct from the very first frame.
+  requestAnimationFrame(() => requestAnimationFrame(resize));
 
   const anyPanelOpen = (): boolean => invPanel.isVisible() || treeUI.isVisible() || waypointPanel.isVisible();
   const closeAllPanels = (): void => {
@@ -166,6 +177,7 @@ function startGame(player: Player): void {
   function teardown(): void {
     loop.stop();
     window.removeEventListener('resize', resize);
+    resizeObserver.disconnect();
     window.removeEventListener('keydown', keydownHandler);
     window.removeEventListener('beforeunload', saveOnUnload);
     window.removeEventListener('pagehide', saveOnUnload);

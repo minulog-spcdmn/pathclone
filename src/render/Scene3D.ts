@@ -118,9 +118,10 @@ export class Scene3D {
     this.scene.add(this.playerRig.group);
   }
 
-  resize(w: number, h: number): void {
+  resize(w: number, h: number, hudHeightPx = 0): void {
     this.renderer.setSize(w, h, false);
     this.camera.resize(w, h);
+    this.camera.fitPlayfield(hudHeightPx);
   }
 
   buildZone(zone: Zone): void {

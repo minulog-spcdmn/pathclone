@@ -38,6 +38,7 @@ export class Hud {
   private levelupTimer = 0;
   private interactHint!: HTMLElement;
   private bannerTimeout = 0;
+  private bottomHud!: HTMLElement;
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -103,6 +104,7 @@ export class Hud {
     this.deathBanner = hud.querySelector('#death-banner')!;
     this.levelupBanner = hud.querySelector('#levelup-banner')!;
     this.interactHint = hud.querySelector('#interact-hint')!;
+    this.bottomHud = hud.querySelector('#bottom-hud')!;
 
     for (let i = 0; i < 2; i++) {
       const slot = document.createElement('div');
@@ -121,6 +123,13 @@ export class Hud {
       slot.innerHTML = `<span class="label"></span><div class="cd-overlay hidden"></div><span class="key-hint">${SKILL_KEY_LABELS[i]}</span>`;
       this.skillSlotsEl.appendChild(slot);
     }
+  }
+
+  /** Actual rendered height of the bottom HUD bar, in CSS px — used to keep the 3D camera's
+   *  playfield framing correct regardless of viewport size, since the globes/skill bar are
+   *  clamped rather than a fixed size. */
+  getBottomHudHeight(): number {
+    return this.bottomHud.getBoundingClientRect().height;
   }
 
   showDeath(): void {
