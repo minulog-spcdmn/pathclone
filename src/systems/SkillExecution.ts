@@ -191,8 +191,12 @@ export function castSkill(
         const t = count === 1 ? 0 : i / (count - 1) - 0.5;
         const angle = dir + (spread * Math.PI / 180) * t;
         const vel = fromAngle(angle, speed);
+        const spawn: Vec2 = {
+          x: caster.pos.x + Math.cos(angle) * 0.55,
+          y: caster.pos.y + Math.sin(angle) * 0.55,
+        };
         ctx.spawnProjectile(
-          { ...caster.pos },
+          spawn,
           vel,
           { ...baseHit, min: eff.minDamage, max: eff.maxDamage },
           team,

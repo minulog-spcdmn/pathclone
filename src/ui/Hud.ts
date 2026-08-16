@@ -5,16 +5,30 @@ import { xpForLevel } from '../entities/Player.ts';
 
 const SKILL_KEY_LABELS = ['LMB', 'MMB', 'RMB', 'Q', 'E', 'R', 'T'];
 
+const DAMAGE_COLORS: Record<string, string> = {
+  physical: '#b0a488',
+  fire: '#ff8a4a',
+  cold: '#7ad0ff',
+  lightning: '#ffe87a',
+  chaos: '#d08aff',
+};
+
 export class Hud {
   private root: HTMLElement;
   private lifeFill!: HTMLElement;
   private esFill!: HTMLElement;
   private manaFill!: HTMLElement;
+  private lifeValue!: HTMLElement;
+  private manaValue!: HTMLElement;
   private skillSlotsEl!: HTMLElement;
   private flaskSlotsEl!: HTMLElement;
+  private xpBar!: HTMLElement;
   private xpFill!: HTMLElement;
-  private xpLabel!: HTMLElement;
-  private topbar!: HTMLElement;
+  private zoneLabel!: HTMLElement;
+  private zoneBanner!: HTMLElement;
+  private bossBar!: HTMLElement;
+  private bossName!: HTMLElement;
+  private bossFill!: HTMLElement;
   private toastsEl!: HTMLElement;
   private minimapCanvas!: HTMLCanvasElement;
   private minimapBg: HTMLCanvasElement = document.createElement('canvas');
@@ -23,6 +37,7 @@ export class Hud {
   private levelupBanner!: HTMLElement;
   private levelupTimer = 0;
   private interactHint!: HTMLElement;
+  private bannerTimeout = 0;
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -33,29 +48,56 @@ export class Hud {
     const hud = document.createElement('div');
     hud.id = 'hud';
     hud.innerHTML = `
-      <div id="toplbar"></div>
-      <div class="orb orb-life"><div class="orb-fill"></div><div class="orb-es-fill"></div><div class="orb-value"></div><div class="orb-label">Life</div></div>
-      <div class="orb orb-mana"><div class="orb-fill"></div><div class="orb-value"></div><div class="orb-label">Mana</div></div>
-      <div id="actionbar">
-        <div id="flaskbar"></div>
-        <div id="skillbar"></div>
+      <div id="bossbar" class="hidden">
+        <div id="bossbar-name"></div>
+        <div id="bossbar-track"><div id="bossbar-fill"></div></div>
       </div>
-      <div id="xpbar"><div id="xpbar-fill"></div><div id="xpbar-label"></div></div>
-      <div id="interact-hint" class="hidden"></div>
-      <canvas id="minimap" width="168" height="168"></canvas>
+      <div id="zone-banner"></div>
+      <div id="minimap-wrap">
+        <canvas id="minimap" width="168" height="168"></canvas>
+        <div id="zone-label"></div>
+        <div id="char-label"></div>
+      </div>
       <div id="toasts"></div>
+      <div id="interact-hint" class="hidden"></div>
+      <div id="bottom-hud">
+        <div class="hud-cluster">
+          <div class="globe globe-life">
+            <div class="orb-fill"></div>
+            <div class="orb-es-fill"></div>
+            <div class="globe-gloss"></div>
+            <div class="orb-value"></div>
+          </div>
+          <div id="flaskbar"></div>
+        </div>
+        <div class="hud-cluster">
+          <div id="skillbar"></div>
+          <div class="globe globe-mana">
+            <div class="orb-fill"></div>
+            <div class="globe-gloss"></div>
+            <div class="orb-value"></div>
+          </div>
+        </div>
+      </div>
+      <div id="xpbar"><div id="xpbar-fill"></div></div>
       <div id="death-banner" class="hidden">YOU HAVE DIED<br/><span style="font-size:14px">Returning to Ashport Landing...</span></div>
       <div id="levelup-banner" class="hidden">LEVEL UP!</div>
     `;
     this.root.appendChild(hud);
-    this.lifeFill = hud.querySelector('.orb-life .orb-fill')!;
-    this.esFill = hud.querySelector('.orb-life .orb-es-fill')!;
-    this.manaFill = hud.querySelector('.orb-mana .orb-fill')!;
+    this.lifeFill = hud.querySelector('.globe-life .orb-fill')!;
+    this.esFill = hud.querySelector('.globe-life .orb-es-fill')!;
+    this.manaFill = hud.querySelector('.globe-mana .orb-fill')!;
+    this.lifeValue = hud.querySelector('.globe-life .orb-value')!;
+    this.manaValue = hud.querySelector('.globe-mana .orb-value')!;
     this.skillSlotsEl = hud.querySelector('#skillbar')!;
     this.flaskSlotsEl = hud.querySelector('#flaskbar')!;
+    this.xpBar = hud.querySelector('#xpbar')!;
     this.xpFill = hud.querySelector('#xpbar-fill')!;
-    this.xpLabel = hud.querySelector('#xpbar-label')!;
-    this.topbar = hud.querySelector('#toplbar')!;
+    this.zoneLabel = hud.querySelector('#zone-label')!;
+    this.zoneBanner = hud.querySelector('#zone-banner')!;
+    this.bossBar = hud.querySelector('#bossbar')!;
+    this.bossName = hud.querySelector('#bossbar-name')!;
+    this.bossFill = hud.querySelector('#bossbar-fill')!;
     this.toastsEl = hud.querySelector('#toasts')!;
     this.minimapCanvas = hud.querySelector('#minimap')!;
     this.deathBanner = hud.querySelector('#death-banner')!;
@@ -64,15 +106,19 @@ export class Hud {
 
     for (let i = 0; i < 2; i++) {
       const slot = document.createElement('div');
-      slot.className = 'flask-slot';
-      slot.innerHTML = `<span class="key-hint">${i + 1}</span><span class="label"></span><div class="cd-overlay hidden"></div>`;
+      slot.className = `flask-slot ${i === 0 ? 'flask-life' : 'flask-mana'}`;
+      slot.innerHTML = `
+        <div class="flask-glass"><div class="flask-fill"></div></div>
+        <div class="cd-text hidden"></div>
+        <span class="key-hint">${i + 1}</span>
+      `;
       this.flaskSlotsEl.appendChild(slot);
     }
     for (let i = 0; i < 7; i++) {
       const slot = document.createElement('div');
       slot.className = 'skill-slot';
       slot.dataset.slot = String(i);
-      slot.innerHTML = `<span class="key-hint">${SKILL_KEY_LABELS[i]}</span><span class="label"></span><div class="cd-overlay hidden"></div>`;
+      slot.innerHTML = `<span class="label"></span><div class="cd-overlay hidden"></div><span class="key-hint">${SKILL_KEY_LABELS[i]}</span>`;
       this.skillSlotsEl.appendChild(slot);
     }
   }
@@ -86,22 +132,41 @@ export class Hud {
     this.levelupTimer = 1.8;
   }
 
+  showZoneBanner(name: string): void {
+    this.zoneBanner.textContent = name;
+    this.zoneBanner.style.opacity = '1';
+    clearTimeout(this.bannerTimeout);
+    this.bannerTimeout = window.setTimeout(() => {
+      this.zoneBanner.style.opacity = '0';
+    }, 2400);
+  }
+
   update(sim: Simulation, dt: number): void {
     const p = sim.player;
     const d = p.derived;
     this.lifeFill.style.height = `${Math.max(0, (p.life / d.maxLife) * 100)}%`;
     this.esFill.style.height = d.maxEnergyShield > 0 ? `${Math.max(0, (p.energyShield / d.maxEnergyShield) * 100)}%` : '0%';
     this.manaFill.style.height = `${Math.max(0, (p.mana / d.maxMana) * 100)}%`;
-    (this.root.querySelector('.orb-life .orb-value') as HTMLElement).textContent = `${Math.round(p.life)}`;
-    (this.root.querySelector('.orb-mana .orb-value') as HTMLElement).textContent = `${Math.round(p.mana)}`;
+    this.lifeValue.textContent = `${Math.round(p.life)}`;
+    this.manaValue.textContent = `${Math.round(p.mana)}`;
 
     const xpBase = xpForLevel(p.level);
     const xpNext = xpForLevel(p.level + 1);
     const pct = p.level >= 100 ? 100 : ((p.xp - xpBase) / Math.max(1, xpNext - xpBase)) * 100;
     this.xpFill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
-    this.xpLabel.textContent = `Level ${p.level}`;
+    this.xpBar.title = `Level ${p.level} — ${p.xp - xpBase} / ${xpNext - xpBase} XP`;
 
-    this.topbar.textContent = `${sim.zone.def.name} · ${p.name}, Level ${p.level} ${p.classDef.name}`;
+    this.zoneLabel.textContent = sim.zone.def.name;
+    (this.root.querySelector('#char-label') as HTMLElement).textContent = `${p.name} · Lv ${p.level} ${p.classDef.name}`;
+
+    const boss = sim.monsters.find((m) => m.def.isBoss && !m.dead);
+    if (boss) {
+      this.bossBar.classList.remove('hidden');
+      this.bossName.textContent = boss.def.name;
+      this.bossFill.style.width = `${Math.max(0, (boss.life / boss.maxLife) * 100)}%`;
+    } else {
+      this.bossBar.classList.add('hidden');
+    }
 
     const slots = this.skillSlotsEl.children;
     for (let i = 0; i < slots.length; i++) {
@@ -111,7 +176,8 @@ export class Hud {
       const skillId = p.skillSlots[i]?.skillId;
       const skill = skillId ? SKILLS[skillId] : null;
       label.textContent = skill ? shortLabel(skill.name) : '';
-      el.title = skill ? skill.name : 'Empty';
+      el.title = skill ? skill.name : 'Empty — socket a gem (I → Gems)';
+      el.style.borderColor = skill ? DAMAGE_COLORS[skill.damageType] : '#574a2e';
       if (skill) {
         const cd = p.cooldowns.get(skill.id) ?? 0;
         if (cd > 0.05) {
@@ -128,19 +194,26 @@ export class Hud {
     const flaskEls = this.flaskSlotsEl.children;
     for (let i = 0; i < flaskEls.length; i++) {
       const el = flaskEls[i] as HTMLElement;
-      const label = el.querySelector('.label') as HTMLElement;
-      const overlay = el.querySelector('.cd-overlay') as HTMLElement;
+      const fill = el.querySelector('.flask-fill') as HTMLElement;
+      const cdText = el.querySelector('.cd-text') as HTMLElement;
       const key = (`flask${i + 1}`) as 'flask1' | 'flask2';
       const item = p.equipment[key];
       const base = item ? ITEM_BASES[item.baseId] : null;
-      label.textContent = base ? (base.flaskKind === 'life' ? 'Life' : 'Mana') : '';
-      el.title = item ? item.name : (key === 'flask1' ? 'Life Flask' : 'Mana Flask');
+      el.title = item ? item.name : (key === 'flask1' ? 'Life Flask (empty slot)' : 'Mana Flask (empty slot)');
+      if (!base) {
+        fill.style.height = '0%';
+        cdText.classList.add('hidden');
+        continue;
+      }
       const cd = p.flaskCooldowns.get(key) ?? 0;
+      const duration = base.flaskDuration ?? 3;
+      const readiness = Math.max(0, Math.min(1, 1 - cd / duration));
+      fill.style.height = `${Math.round(readiness * 100)}%`;
       if (cd > 0.05) {
-        overlay.classList.remove('hidden');
-        overlay.textContent = cd.toFixed(1);
+        cdText.classList.remove('hidden');
+        cdText.textContent = cd.toFixed(1);
       } else {
-        overlay.classList.add('hidden');
+        cdText.classList.add('hidden');
       }
     }
 

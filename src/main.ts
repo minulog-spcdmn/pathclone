@@ -77,7 +77,20 @@ function startGame(player: Player): void {
   };
   sim.onDeath = () => hud.showDeath();
   sim.onLevelUp = () => hud.showLevelUp();
-  sim.onZoneChange = () => saveCharacter(sim.player);
+  sim.onZoneChange = () => {
+    saveCharacter(sim.player);
+    hud.showZoneBanner(sim.zone.def.name);
+  };
+  hud.showZoneBanner(sim.zone.def.name);
+
+  scene.onDropClick = (drop) => sim.queueInteraction({ kind: 'drop', drop });
+  scene.onExitClick = (exit) => sim.queueInteraction({ kind: 'exit', exit });
+  scene.onStashClick = (pos) => sim.queueInteraction({ kind: 'stash', pos });
+  scene.onWaypointClick = (pos) => sim.queueInteraction({ kind: 'waypoint', pos });
+
+  if (new URLSearchParams(location.search).has('debug')) {
+    (window as unknown as { __sim: Simulation }).__sim = sim;
+  }
 
   const togglePause = (): void => {
     if (pauseMenu.isVisible()) {

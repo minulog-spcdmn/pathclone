@@ -12,6 +12,9 @@ export abstract class Entity {
   facing = 0;
   dead = false;
   team: Team = 'enemy';
+  /** Sim timestamps driving render-side attack swings and hit flashes. */
+  lastAttackAt = -10;
+  lastHitAt = -10;
 
   constructor(pos: Vec2) {
     this.id = nextId++;

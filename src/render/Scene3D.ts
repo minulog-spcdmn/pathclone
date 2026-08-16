@@ -1,15 +1,16 @@
 import * as THREE from 'three';
 import type { Camera } from '../engine/Camera.ts';
-import type { Zone } from '../world/Zone.ts';
+import type { Zone, ZoneExit } from '../world/Zone.ts';
 import type { Simulation } from '../state/Simulation.ts';
 import type { Monster } from '../entities/Monster.ts';
-import type { Minion } from '../entities/Minion.ts';
 import type { Projectile } from '../entities/Projectile.ts';
 import type { ItemDrop } from '../entities/ItemDrop.ts';
 import type { GroundEffect } from '../entities/GroundEffect.ts';
 import { RARITY_COLOR } from '../core/item.ts';
-import type { CreatureRig } from './rigs.ts';
-import { createCreatureRig, disposeRig, updateRigTransform } from './rigs.ts';
+import { ITEM_BASES } from '../data/items.ts';
+import type { CreatureRig, WeaponKind } from './rigs.ts';
+import { createRig, disposeRig, updateRig } from './rigs.ts';
+import type { Vec2 } from '../engine/Vec2.ts';
 
 function hex(color: string): number {
   return parseInt(color.slice(1), 16);
@@ -34,11 +35,27 @@ function disposeGroupChildren(group: THREE.Group): void {
   }
 }
 
+/** A DOM label anchored to a ground position, offset upward in screen pixels (keeps
+ * it aligned with its object regardless of camera perspective). */
 interface WorldLabel {
   el: HTMLDivElement;
-  pos: { x: number; y: number; z: number };
-  visible: boolean;
+  ax: number;
+  ay: number;
+  yOff: number;
 }
+
+const WEAPON_CLASS_TO_KIND: Record<string, WeaponKind> = {
+  mace: 'mace',
+  quarterstaff: 'staff',
+  staff: 'staff',
+  bow: 'bow',
+  sceptre: 'sceptre',
+  wand: 'wand',
+  crossbow: 'crossbow',
+  sword: 'sword',
+  dagger: 'sword',
+  claw: 'sword',
+};
 
 export class Scene3D {
   scene = new THREE.Scene();
@@ -46,21 +63,30 @@ export class Scene3D {
   camera: Camera;
   labelLayer: HTMLElement;
 
+  onDropClick?: (drop: ItemDrop) => void;
+  onExitClick?: (exit: ZoneExit) => void;
+  onStashClick?: (pos: Vec2) => void;
+  onWaypointClick?: (pos: Vec2) => void;
+
   private floorMesh: THREE.InstancedMesh | null = null;
   private wallMesh: THREE.InstancedMesh | null = null;
   private decorGroup = new THREE.Group();
   private exitGroup = new THREE.Group();
 
   private playerRig: CreatureRig;
+  private playerWeapon: WeaponKind | '__initial' = '__initial';
+  private playerColor = '#d8ccb0';
   private monsterRigs = new Map<number, CreatureRig>();
   private minionRigs = new Map<number, CreatureRig>();
+  private dyingRigs: { rig: CreatureRig; start: number }[] = [];
   private projectileMeshes = new Map<number, THREE.Mesh>();
   private dropMeshes = new Map<number, THREE.Group>();
   private groundEffectMeshes = new Map<number, THREE.Mesh>();
 
   private dropLabels = new Map<number, WorldLabel>();
   private exitLabels: WorldLabel[] = [];
-  private nameplateLabels = new Map<number, WorldLabel>();
+  private decoLabels: WorldLabel[] = [];
+  private bossLabels = new Map<number, WorldLabel>();
 
   constructor(canvas: HTMLCanvasElement, camera: Camera, labelLayer: HTMLElement) {
     this.camera = camera;
@@ -72,15 +98,15 @@ export class Scene3D {
     this.scene.background = new THREE.Color(0x08070a);
     this.scene.fog = new THREE.Fog(0x08070a, 16, 62);
 
-    const ambient = new THREE.AmbientLight(0xccd4ff, 0.55);
-    const sun = new THREE.DirectionalLight(0xfff0d0, 1.15);
+    const ambient = new THREE.AmbientLight(0xccd4ff, 0.5);
+    const sun = new THREE.DirectionalLight(0xfff0d0, 1.2);
     sun.position.set(-10, 18, 8);
-    const fill = new THREE.HemisphereLight(0x8090c0, 0x201810, 0.4);
+    const fill = new THREE.HemisphereLight(0x8090c0, 0x201810, 0.45);
     this.scene.add(ambient, sun, fill);
 
     this.scene.add(this.decorGroup, this.exitGroup);
 
-    this.playerRig = createCreatureRig('#eee6c8', 1, '#f4ecd4');
+    this.playerRig = createRig({ kind: 'humanoid', color: this.playerColor, weapon: 'none', headColor: '#e8d0b0' });
     this.scene.add(this.playerRig.group);
   }
 
@@ -135,17 +161,25 @@ export class Scene3D {
     floorMesh.instanceMatrix.needsUpdate = true;
     if (floorMesh.instanceColor) floorMesh.instanceColor.needsUpdate = true;
     wallMesh.instanceMatrix.needsUpdate = true;
-    floorMesh.receiveShadow = false;
     this.scene.add(floorMesh, wallMesh);
     this.floorMesh = floorMesh;
     this.wallMesh = wallMesh;
 
-    this.scene.fog = new THREE.Fog(hex(zone.def.wallColor), 14, zone.def.kind === 'town' ? 60 : 34);
+    this.scene.fog = new THREE.Fog(hex(zone.def.wallColor), 14, zone.def.kind === 'town' ? 60 : 36);
 
     for (const deco of zone.decorations) {
       const mesh = this.buildDecoration(deco.kind, zone.def.accentColor);
       mesh.position.set(deco.pos.x, 0, deco.pos.y);
       this.decorGroup.add(mesh);
+      if (deco.kind === 'stash' || deco.kind === 'waypoint') {
+        const el = this.createLabel(deco.kind === 'stash' ? 'Stash' : 'Waypoint', '#f0d8a0', 'deco-label');
+        const pos = deco.pos;
+        el.addEventListener('click', () => {
+          if (deco.kind === 'stash') this.onStashClick?.(pos);
+          else this.onWaypointClick?.(pos);
+        });
+        this.decoLabels.push({ el, ax: pos.x, ay: pos.y, yOff: deco.kind === 'stash' ? -52 : -96 });
+      }
     }
 
     for (const exit of zone.exits) {
@@ -157,8 +191,9 @@ export class Scene3D {
       ring.position.set(exit.pos.x, 0.05, exit.pos.y);
       this.exitGroup.add(ring);
 
-      const label = this.createLabel(exit.label, '#bdf0c8');
-      this.exitLabels.push({ el: label, pos: { x: exit.pos.x, y: 1.4, z: exit.pos.y }, visible: true });
+      const el = this.createLabel(exit.label, '#bdf0c8', 'exit-label');
+      el.addEventListener('click', () => this.onExitClick?.(exit));
+      this.exitLabels.push({ el, ax: exit.pos.x, ay: exit.pos.y, yOff: -30 });
     }
   }
 
@@ -228,70 +263,130 @@ export class Scene3D {
     disposeGroupChildren(this.exitGroup);
     for (const l of this.exitLabels) l.el.remove();
     this.exitLabels = [];
+    for (const l of this.decoLabels) l.el.remove();
+    this.decoLabels = [];
+    for (const rig of this.dyingRigs) {
+      this.scene.remove(rig.rig.group);
+      disposeRig(rig.rig);
+    }
+    this.dyingRigs = [];
   }
 
-  private createLabel(text: string, color: string): HTMLDivElement {
+  private createLabel(text: string, color: string, extraClass?: string): HTMLDivElement {
     const el = document.createElement('div');
-    el.className = 'world-label';
+    el.className = 'world-label' + (extraClass ? ` ${extraClass}` : '');
     el.textContent = text;
     el.style.color = color;
     this.labelLayer.appendChild(el);
     return el;
   }
 
-  private syncCreaturePool<T extends { id: number; pos: { x: number; y: number }; facing: number }>(
-    pool: Map<number, CreatureRig>,
-    list: T[],
-    makeRig: (item: T) => CreatureRig,
-  ): void {
+  private desiredPlayerWeapon(sim: Simulation): WeaponKind {
+    const weapon = sim.player.equipment.weapon;
+    if (!weapon) return 'none';
+    const base = ITEM_BASES[weapon.baseId];
+    return WEAPON_CLASS_TO_KIND[base?.weaponClass ?? ''] ?? 'none';
+  }
+
+  private rigForMonster(m: Monster): CreatureRig {
+    const icon = m.def.icon;
+    if (icon === 'wolf') return createRig({ kind: 'quadruped', color: m.def.color, scale: 0.95 + m.radius * 0.3 });
+    if (icon === 'blob') return createRig({ kind: 'blob', color: m.def.color, scale: 0.95 + m.radius * 0.4 });
+    const weapon: WeaponKind = m.def.behavior === 'ranged' ? 'bow' : m.def.behavior === 'caster' ? 'staff' : 'sword';
+    const scale = m.def.isBoss ? 1.9 : icon === 'brute' ? 1.3 : 1;
+    return createRig({ kind: 'humanoid', color: m.def.color, scale, weapon });
+  }
+
+  private syncCreatures(sim: Simulation): void {
+    const now = sim.time;
     const seen = new Set<number>();
-    for (const item of list) {
-      seen.add(item.id);
-      let rig = pool.get(item.id);
+    for (const m of sim.monsters) {
+      seen.add(m.id);
+      let rig = this.monsterRigs.get(m.id);
       if (!rig) {
-        rig = makeRig(item);
-        pool.set(item.id, rig);
+        rig = this.rigForMonster(m);
+        rig.prevX = m.pos.x;
+        rig.prevY = m.pos.y;
+        this.monsterRigs.set(m.id, rig);
         this.scene.add(rig.group);
       }
-      updateRigTransform(rig, item.pos, item.facing, performance.now() / 1000);
+      updateRig(rig, m.pos, m.facing, now, m.lastAttackAt, m.lastHitAt);
     }
-    for (const [id, rig] of pool) {
+    for (const [id, rig] of this.monsterRigs) {
       if (!seen.has(id)) {
-        this.scene.remove(rig.group);
-        disposeRig(rig);
-        pool.delete(id);
-        const label = this.nameplateLabels.get(id);
+        this.monsterRigs.delete(id);
+        this.dyingRigs.push({ rig, start: now });
+        const label = this.bossLabels.get(id);
         if (label) {
           label.el.remove();
-          this.nameplateLabels.delete(id);
+          this.bossLabels.delete(id);
         }
+      }
+    }
+
+    const seenMinions = new Set<number>();
+    for (const m of sim.minions) {
+      seenMinions.add(m.id);
+      let rig = this.minionRigs.get(m.id);
+      if (!rig) {
+        rig = createRig({ kind: 'humanoid', color: m.def.color, scale: 0.82, weapon: 'sword' });
+        rig.prevX = m.pos.x;
+        rig.prevY = m.pos.y;
+        this.minionRigs.set(m.id, rig);
+        this.scene.add(rig.group);
+      }
+      updateRig(rig, m.pos, m.facing, now, m.lastAttackAt, m.lastHitAt);
+    }
+    for (const [id, rig] of this.minionRigs) {
+      if (!seenMinions.has(id)) {
+        this.minionRigs.delete(id);
+        this.dyingRigs.push({ rig, start: now });
+      }
+    }
+
+    // death animation: sink + shrink, then dispose
+    for (let i = this.dyingRigs.length - 1; i >= 0; i--) {
+      const d = this.dyingRigs[i];
+      const t = (now - d.start) / 0.32;
+      if (t >= 1) {
+        this.scene.remove(d.rig.group);
+        disposeRig(d.rig);
+        this.dyingRigs.splice(i, 1);
+      } else {
+        d.rig.group.scale.setScalar(d.rig.baseScale * (1 - t * 0.7));
+        d.rig.group.position.y = -t * 0.5;
       }
     }
   }
 
   syncFrame(sim: Simulation): void {
     const now = sim.time;
-    updateRigTransform(this.playerRig, sim.player.pos, sim.player.facing, now);
+
+    const desiredWeapon = this.desiredPlayerWeapon(sim);
+    const desiredColor = sim.player.classDef.color;
+    if (desiredWeapon !== this.playerWeapon || desiredColor !== this.playerColor) {
+      const prevX = this.playerRig.prevX;
+      const prevY = this.playerRig.prevY;
+      this.scene.remove(this.playerRig.group);
+      disposeRig(this.playerRig);
+      this.playerRig = createRig({ kind: 'humanoid', color: desiredColor, weapon: desiredWeapon, headColor: '#e8d0b0' });
+      this.playerRig.prevX = prevX;
+      this.playerRig.prevY = prevY;
+      this.scene.add(this.playerRig.group);
+      this.playerWeapon = desiredWeapon;
+      this.playerColor = desiredColor;
+    }
+    updateRig(this.playerRig, sim.player.pos, sim.player.facing, now, sim.player.lastAttackAt, sim.player.lastHitAt);
     this.playerRig.group.visible = !sim.player.dead;
 
-    this.syncCreaturePool(this.monsterRigs, sim.monsters, (m) => {
-      const mm = m as unknown as Monster;
-      return createCreatureRig(mm.def.color, mm.def.isBoss ? 1.7 : 0.9 + mm.radius * 0.3);
-    });
-    this.syncCreaturePool(this.minionRigs, sim.minions, (m) => {
-      const mm = m as unknown as Minion;
-      return createCreatureRig(mm.def.color, 0.8);
-    });
-
+    this.syncCreatures(sim);
     this.syncProjectiles(sim.projectiles);
     this.syncDrops(sim.drops, now);
     this.syncGroundEffects(sim.groundEffects, now);
 
-    if (this.decorGroup.children.length) {
-      for (const child of this.decorGroup.children) {
-        const spin = (child as THREE.Object3D).userData.spin as THREE.Object3D | undefined;
-        if (spin) spin.rotation.y = now * 1.4;
-      }
+    for (const child of this.decorGroup.children) {
+      const spin = (child as THREE.Object3D).userData.spin as THREE.Object3D | undefined;
+      if (spin) spin.rotation.y = now * 1.4;
     }
     for (const ring of this.exitGroup.children) {
       ring.rotation.z = now * 0.5;
@@ -307,13 +402,13 @@ export class Scene3D {
       let mesh = this.projectileMeshes.get(p.id);
       if (!mesh) {
         mesh = new THREE.Mesh(
-          new THREE.SphereGeometry(0.15, 8, 8),
+          new THREE.SphereGeometry(0.13, 8, 8),
           new THREE.MeshStandardMaterial({ color: hex(p.color), emissive: hex(p.color), emissiveIntensity: 1.4 }),
         );
         this.projectileMeshes.set(p.id, mesh);
         this.scene.add(mesh);
       }
-      mesh.position.set(p.pos.x, 0.55, p.pos.y);
+      mesh.position.set(p.pos.x, 0.85, p.pos.y);
     }
     for (const [id, mesh] of this.projectileMeshes) {
       if (!seen.has(id)) {
@@ -334,21 +429,24 @@ export class Scene3D {
         group = new THREE.Group();
         const color = d.item ? hex(RARITY_COLOR[d.item.rarity]) : 0xe0c040;
         const gem = new THREE.Mesh(
-          new THREE.OctahedronGeometry(0.22, 0),
+          new THREE.OctahedronGeometry(0.2, 0),
           new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.35, roughness: 0.4 }),
         );
         group.add(gem);
         this.dropMeshes.set(d.id, group);
         this.scene.add(group);
 
-        const label = this.createLabel(d.item ? d.item.name : `${d.gold} Gold`, d.item ? `#${RARITY_COLOR[d.item.rarity].slice(1)}` : '#e0c040');
-        this.dropLabels.set(d.id, { el: label, pos: { x: d.pos.x, y: 0.9, z: d.pos.y }, visible: true });
+        const el = this.createLabel(
+          d.item ? d.item.name : `${d.gold} Gold`,
+          d.item ? RARITY_COLOR[d.item.rarity] : '#e0c040',
+          'loot-label',
+        );
+        el.addEventListener('click', () => this.onDropClick?.(d));
+        this.dropLabels.set(d.id, { el, ax: d.pos.x, ay: d.pos.y, yOff: -30 });
       }
-      const bob = Math.sin(now * 3 + d.bobPhase) * 0.08;
-      group.position.set(d.pos.x, 0.4 + bob, d.pos.y);
+      const bob = Math.sin(now * 3 + d.bobPhase) * 0.07;
+      group.position.set(d.pos.x, 0.35 + bob, d.pos.y);
       group.rotation.y = now * 1.2;
-      const lbl = this.dropLabels.get(d.id);
-      if (lbl) lbl.pos = { x: d.pos.x, y: 0.9 + bob, z: d.pos.y };
     }
     for (const [id, group] of this.dropMeshes) {
       if (!seen.has(id)) {
@@ -404,37 +502,38 @@ export class Scene3D {
   private updateLabels(sim: Simulation): void {
     for (const [, lbl] of this.dropLabels) this.placeLabel(lbl);
     for (const lbl of this.exitLabels) this.placeLabel(lbl);
+    for (const lbl of this.decoLabels) this.placeLabel(lbl);
 
     const seenBoss = new Set<number>();
     for (const m of sim.monsters) {
       if (!m.def.isBoss) continue;
       seenBoss.add(m.id);
-      let lbl = this.nameplateLabels.get(m.id);
+      let lbl = this.bossLabels.get(m.id);
       if (!lbl) {
-        const el = this.createLabel(m.def.name, '#ffb4a8');
-        el.classList.add('world-label-boss');
-        lbl = { el, pos: { x: m.pos.x, y: 0, z: m.pos.y }, visible: true };
-        this.nameplateLabels.set(m.id, lbl);
+        const el = this.createLabel(m.def.name, '#ffb4a8', 'world-label-boss');
+        lbl = { el, ax: m.pos.x, ay: m.pos.y, yOff: -150 };
+        this.bossLabels.set(m.id, lbl);
       }
-      lbl.pos = { x: m.pos.x, y: 1.9, z: m.pos.y };
+      lbl.ax = m.pos.x;
+      lbl.ay = m.pos.y;
       this.placeLabel(lbl);
     }
-    for (const [id, lbl] of this.nameplateLabels) {
+    for (const [id, lbl] of this.bossLabels) {
       if (!seenBoss.has(id)) {
         lbl.el.remove();
-        this.nameplateLabels.delete(id);
+        this.bossLabels.delete(id);
       }
     }
   }
 
   private placeLabel(lbl: WorldLabel): void {
-    const s = this.camera.worldToScreen(lbl.pos.x, lbl.pos.z, lbl.pos.y);
-    if (!s) {
+    const s = this.camera.worldToScreen(lbl.ax, lbl.ay, 0);
+    if (!s || s.x < -80 || s.x > this.camera.viewW + 80 || s.y < -60 || s.y > this.camera.viewH + 120) {
       lbl.el.style.display = 'none';
       return;
     }
     lbl.el.style.display = 'block';
-    lbl.el.style.transform = `translate(-50%, -100%) translate(${s.x}px, ${s.y}px)`;
+    lbl.el.style.transform = `translate(-50%, -100%) translate(${Math.round(s.x)}px, ${Math.round(s.y + lbl.yOff)}px)`;
   }
 
   render(): void {

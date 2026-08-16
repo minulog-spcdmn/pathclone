@@ -240,6 +240,7 @@ export class Simulation {
       this.pushFloatText(target.pos, result.dodged ? 'Dodged' : 'Evaded', '#aaaaaa');
       return;
     }
+    target.lastHitAt = this.time;
     if (target instanceof Player) {
       target.energyShield -= result.toEs;
       target.life -= result.toLife;
@@ -285,15 +286,21 @@ export class Simulation {
       this.maybeGrantAscendancyPoint();
     }
     const loot = rollMonsterLoot(m.def, m.zoneLevel, this.rng);
-    this.player.gold += loot.gold;
     for (const [k, v] of Object.entries(loot.currency)) {
       (this.player.currencies as unknown as Record<string, number>)[k] += v ?? 0;
     }
+    let scatter = 0;
     for (const item of loot.items) {
-      const drop = new ItemDrop(m.pos, item, this.time);
+      const drop = new ItemDrop({ x: m.pos.x + Math.cos(scatter) * 0.5 * scatter, y: m.pos.y + Math.sin(scatter) * 0.5 * scatter }, item, this.time);
       this.drops.push(drop);
+      scatter += 1;
     }
-    this.toasts.push({ text: `${m.def.name} slain (+${m.def.xpValue} xp, +${loot.gold}g)`, life: 2 });
+    if (loot.gold > 0) {
+      const goldDrop = new ItemDrop({ x: m.pos.x, y: m.pos.y + 0.4 }, null, this.time);
+      goldDrop.gold = loot.gold;
+      this.drops.push(goldDrop);
+    }
+    this.toasts.push({ text: `${m.def.name} slain (+${m.def.xpValue} xp)`, life: 2 });
   }
 
   private maybeGrantAscendancyPoint(): void {
@@ -345,7 +352,7 @@ export class Simulation {
     this.groundEffects = this.groundEffects.filter((g) => !g.dead);
     this.drops = this.drops.filter((d) => !d.dead);
 
-    this.camera.centerOn(this.player.pos.x, this.player.pos.y, dt);
+    this.camera.centerOn(this.player.pos.x, this.player.pos.y);
     this.input.endFrame();
   }
 
@@ -395,12 +402,12 @@ export class Simulation {
     // A fresh left-click on something interactive queues an auto-walk-and-interact,
     // taking priority over that click being spent on the LMB skill slot.
     if (!p.isDodging && this.input.mousePressed && this.hoverTarget) {
-      this.pendingInteraction = this.buildPendingInteraction(this.hoverTarget);
+      this.queueInteraction(this.hoverTarget);
     }
 
     if (p.isDodging) {
       p.dodgeTimer -= dt;
-      this.attemptMove(p, p.dodgeDir.x * 9 * dt, p.dodgeDir.y * 9 * dt);
+      this.attemptMove(p, p.dodgeDir.x * 10 * dt, p.dodgeDir.y * 10 * dt);
       if (p.dodgeTimer <= 0) p.isDodging = false;
     } else if (this.pendingInteraction) {
       this.advancePendingInteraction(dt);
@@ -420,7 +427,7 @@ export class Simulation {
         const status = tickStatusEffects(p, this.time, dt);
         if (!status.frozen) {
           const sprinting = wasdHeld && (this.input.isDown('ShiftLeft') || this.input.isDown('ShiftRight'));
-          const speed = 3.3 * p.derived.movementSpeed * (sprinting ? 1.6 : 1) * (1 - Math.min(80, status.chillPercent) / 100);
+          const speed = 3.9 * p.derived.movementSpeed * (sprinting ? 1.5 : 1) * (1 - Math.min(80, status.chillPercent) / 100);
           if (wasdHeld) this.attemptMove(p, mx * speed * dt, my * speed * dt);
         }
         this.applyDotDamage(p, status.dotDamage);
@@ -484,6 +491,12 @@ export class Simulation {
     return null;
   }
 
+  /** Queue a walk-and-interact toward a world target — used by canvas clicks and DOM label clicks alike. */
+  queueInteraction(target: HoverTarget): void {
+    if (this.paused || this.inputLocked || this.player.dead) return;
+    this.pendingInteraction = this.buildPendingInteraction(target);
+  }
+
   private buildPendingInteraction(hover: HoverTarget): PendingInteraction {
     switch (hover.kind) {
       case 'drop':
@@ -512,7 +525,7 @@ export class Simulation {
     }
     const dir = angleTo(p.pos, interaction.targetPos);
     p.facing = dir;
-    const speed = 3.3 * p.derived.movementSpeed;
+    const speed = 3.9 * p.derived.movementSpeed;
     this.attemptMove(p, Math.cos(dir) * speed * dt, Math.sin(dir) * speed * dt);
   }
 
@@ -581,6 +594,7 @@ export class Simulation {
     if (useBlood) p.life -= castResult.effectiveManaCost;
     else p.mana -= castResult.effectiveManaCost;
 
+    p.lastAttackAt = this.time;
     p.cooldowns.set(skill.id, Math.max(skill.cooldown, 0.05));
     p.attackCooldown = Math.max(0.08, castResult.castTime);
   }
@@ -755,6 +769,7 @@ export class Simulation {
       m.attackTimer -= dt;
       if (m.attackTimer <= 0) {
         m.attackTimer = m.def.attackCooldown;
+        m.lastAttackAt = this.time;
         this.monsterAttack(m);
       }
     }
@@ -779,7 +794,7 @@ export class Simulation {
       const dir = angleTo(m.pos, this.player.pos);
       this.projectiles.push(
         new Projectile(
-          { ...m.pos },
+          { x: m.pos.x + Math.cos(dir) * 0.55, y: m.pos.y + Math.sin(dir) * 0.55 },
           { x: Math.cos(dir) * speed, y: Math.sin(dir) * speed },
           hit,
           'enemy',
@@ -818,6 +833,7 @@ export class Simulation {
           minion.attackTimer -= dt;
           if (minion.attackTimer <= 0) {
             minion.attackTimer = minion.def.attackCooldown;
+            minion.lastAttackAt = this.time;
             const hit: HitInstance = {
               min: minion.damageMin,
               max: minion.damageMax,
