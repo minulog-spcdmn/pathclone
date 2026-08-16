@@ -14,13 +14,21 @@ type Tab = 'inventory' | 'stash' | 'craft' | 'gems' | 'character';
 
 const EQUIP_SLOT_LABELS: Record<EquipmentSlotKey, string> = {
   weapon: 'Weapon', offhand: 'Offhand', helmet: 'Helmet', body: 'Body', gloves: 'Gloves', boots: 'Boots',
-  belt: 'Belt', amulet: 'Amulet', ring1: 'Ring', ring2: 'Ring', flask1: 'Flask', flask2: 'Flask', flask3: 'Flask', flask4: 'Flask',
+  belt: 'Belt', amulet: 'Amulet', ring1: 'Ring', ring2: 'Ring', flask1: 'Life Flask', flask2: 'Mana Flask',
 };
 
 const CURRENCY_LABELS: Record<CraftAction, string> = {
   transmutation: 'Orb of Transmutation', augmentation: 'Orb of Augmentation', alteration: 'Orb of Alteration',
   regal: 'Regal Orb', chaos: 'Chaos Orb', alchemy: 'Orb of Alchemy', exalted: 'Exalted Orb',
 };
+
+interface DragSource {
+  instanceId: string;
+  kind: 'inventory' | 'stash' | 'equipment';
+  slot?: EquipmentSlotKey;
+}
+
+const STASH_RANGE = 2.2;
 
 export class InventoryPanel {
   private panel: HTMLElement;
@@ -29,6 +37,8 @@ export class InventoryPanel {
   private tooltip: HTMLElement;
   private selectedCurrency: CraftAction | null = null;
   private selectedSkillSlot = 0;
+  private selectedGemInstanceId: string | null = null;
+  private dragSource: DragSource | null = null;
   onClose?: () => void;
   onDirty?: () => void;
 
@@ -104,17 +114,28 @@ export class InventoryPanel {
   private renderEquipRow(container: HTMLElement, player: Player): void {
     const row = document.createElement('div');
     row.className = 'equip-row';
-    const order: EquipmentSlotKey[] = ['weapon', 'offhand', 'helmet', 'body', 'gloves', 'boots', 'belt', 'amulet', 'ring1', 'ring2', 'flask1', 'flask2', 'flask3', 'flask4'];
+    const order: EquipmentSlotKey[] = ['weapon', 'offhand', 'helmet', 'body', 'gloves', 'boots', 'belt', 'amulet', 'ring1', 'ring2', 'flask1', 'flask2'];
     for (const key of order) {
       const slot = document.createElement('div');
       slot.className = 'equip-slot';
       const item = player.equipment[key];
+      slot.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        slot.classList.add('drag-over');
+      });
+      slot.addEventListener('dragleave', () => slot.classList.remove('drag-over'));
+      slot.addEventListener('drop', (e) => {
+        e.preventDefault();
+        slot.classList.remove('drag-over');
+        this.handleEquipDrop(key);
+      });
       if (item) {
         const chip = document.createElement('div');
         chip.className = 'equip-item';
         chip.style.background = RARITY_COLOR[item.rarity];
         chip.textContent = shortName(item.name);
-        chip.addEventListener('click', () => this.unequip(key));
+        chip.draggable = true;
+        chip.addEventListener('dragstart', () => { this.dragSource = { instanceId: item.instanceId, kind: 'equipment', slot: key }; });
         this.attachTooltip(chip, item);
         slot.appendChild(chip);
       } else {
@@ -137,16 +158,17 @@ export class InventoryPanel {
     hint.style.fontSize = '11px';
     hint.style.opacity = '0.7';
     hint.style.marginBottom = '8px';
-    hint.textContent = 'Click an item to equip it. Click an equipped item to unequip. Right-click to sell.';
+    hint.textContent = 'Drag items to equip, move them, or send them to the stash. Right-click to sell.';
     body.appendChild(hint);
-    body.appendChild(this.buildGrid(player.inventory, (item) => this.tryEquip(item), (item) => this.sellItem(item)));
+    body.appendChild(this.buildGrid(player.inventory, 'inventory', (item) => this.sellItem(item)));
   }
 
   private renderStashTab(body: HTMLElement): void {
     const player = this.sim!.player;
-    if (this.sim!.zone.def.kind !== 'town') {
+    const nearStash = this.isNearStash();
+    if (!nearStash) {
       const msg = document.createElement('div');
-      msg.textContent = 'The stash can only be accessed in Ashport Landing.';
+      msg.textContent = 'You need to be at the stash crate in Ashport Landing to use it.';
       body.appendChild(msg);
       return;
     }
@@ -156,28 +178,25 @@ export class InventoryPanel {
     wrap.style.flexWrap = 'wrap';
 
     const invCol = document.createElement('div');
-    invCol.innerHTML = '<div class="stat-section-title">Inventory (click to move to stash)</div>';
-    invCol.appendChild(this.buildGrid(player.inventory, (item) => {
-      const removed = player.inventory.removeItem(item.instanceId);
-      if (removed) {
-        if (!player.stash.addItem(removed)) player.inventory.addItem(removed);
-        this.markDirty();
-      }
-    }));
+    invCol.innerHTML = '<div class="stat-section-title">Inventory</div>';
+    invCol.appendChild(this.buildGrid(player.inventory, 'inventory'));
 
     const stashCol = document.createElement('div');
-    stashCol.innerHTML = '<div class="stat-section-title">Stash (click to move to inventory)</div>';
-    stashCol.appendChild(this.buildGrid(player.stash, (item) => {
-      const removed = player.stash.removeItem(item.instanceId);
-      if (removed) {
-        if (!player.inventory.addItem(removed)) player.stash.addItem(removed);
-        this.markDirty();
-      }
-    }));
+    stashCol.innerHTML = '<div class="stat-section-title">Stash</div>';
+    stashCol.appendChild(this.buildGrid(player.stash, 'stash'));
 
     wrap.appendChild(invCol);
     wrap.appendChild(stashCol);
     body.appendChild(wrap);
+  }
+
+  private isNearStash(): boolean {
+    const sim = this.sim!;
+    if (sim.zone.def.kind !== 'town') return false;
+    const stash = sim.zone.decorations.find((d) => d.kind === 'stash');
+    if (!stash) return false;
+    const d = Math.hypot(sim.player.pos.x - stash.pos.x, sim.player.pos.y - stash.pos.y);
+    return d <= STASH_RANGE;
   }
 
   private renderCraftTab(body: HTMLElement): void {
@@ -211,99 +230,171 @@ export class InventoryPanel {
       : 'Select a currency above, then click an item to apply it.';
     body.appendChild(hint);
 
-    body.appendChild(this.buildGrid(player.inventory, (item) => {
-      if (!this.selectedCurrency) return;
-      if (!canApplyCraft(item, this.selectedCurrency)) {
-        this.sim!.toasts.push({ text: 'That currency cannot be used on this item.', life: 1.6 });
-        return;
-      }
-      player.currencies[this.selectedCurrency] -= 1;
-      applyCraft(item, this.selectedCurrency, this.sim!.rng);
-      this.markDirty();
-    }, undefined, (item) => this.selectedCurrency ? canApplyCraft(item, this.selectedCurrency) : true));
+    body.appendChild(this.buildGrid(
+      player.inventory,
+      'inventory',
+      undefined,
+      (item) => (this.selectedCurrency ? canApplyCraft(item, this.selectedCurrency) : true),
+      (item) => {
+        if (!this.selectedCurrency) return;
+        if (!canApplyCraft(item, this.selectedCurrency)) {
+          this.sim!.toasts.push({ text: 'That currency cannot be used on this item.', life: 1.6 });
+          return;
+        }
+        player.currencies[this.selectedCurrency] -= 1;
+        applyCraft(item, this.selectedCurrency, this.sim!.rng);
+        this.markDirty();
+      },
+    ));
   }
 
   private renderGemsTab(body: HTMLElement): void {
     const player = this.sim!.player;
     const slotRow = document.createElement('div');
     slotRow.style.display = 'flex';
+    slotRow.style.flexWrap = 'wrap';
     slotRow.style.gap = '8px';
     slotRow.style.marginBottom = '12px';
-    for (let i = 0; i < 4; i++) {
+    const keyLabels = ['LMB', 'MMB', 'RMB', 'Q', 'E', 'R', 'T'];
+    for (let i = 0; i < player.skillSlots.length; i++) {
       const btn = document.createElement('button');
       btn.className = 'tab-btn' + (this.selectedSkillSlot === i ? ' active' : '');
       const skill = player.skillSlots[i].skillId ? SKILLS[player.skillSlots[i].skillId!] : null;
-      btn.textContent = `${i + 1}: ${skill ? skill.name : 'Empty'}`;
+      btn.textContent = `${keyLabels[i]}: ${skill ? skill.name : 'Empty'}`;
       btn.addEventListener('click', () => {
         this.selectedSkillSlot = i;
+        this.selectedGemInstanceId = null;
         this.render();
       });
       slotRow.appendChild(btn);
     }
     body.appendChild(slotRow);
 
-    const title = document.createElement('div');
-    title.className = 'stat-section-title';
-    title.textContent = `Active Skills — assign to slot ${this.selectedSkillSlot + 1}`;
-    body.appendChild(title);
+    const slot = player.skillSlots[this.selectedSkillSlot];
+    const skill = slot.skillId ? SKILLS[slot.skillId] : null;
+
+    if (skill) {
+      const current = document.createElement('div');
+      current.className = 'gem-row';
+      current.style.marginBottom = '10px';
+      current.innerHTML = `<span><b>${skill.name}</b> socketed</span><span style="opacity:0.7">click to unsocket</span>`;
+      current.addEventListener('click', () => {
+        slot.skillId = null;
+        slot.supportIds = [null, null];
+        this.markDirty();
+      });
+      body.appendChild(current);
+
+      const supportTitle = document.createElement('div');
+      supportTitle.className = 'stat-section-title';
+      supportTitle.textContent = 'Support Gem Sockets';
+      body.appendChild(supportTitle);
+
+      const supportRow = document.createElement('div');
+      supportRow.style.display = 'flex';
+      supportRow.style.gap = '8px';
+      supportRow.style.marginBottom = '10px';
+      for (let i = 0; i < slot.supportIds.length; i++) {
+        const chip = document.createElement('div');
+        chip.className = 'currency-chip';
+        const supportId = slot.supportIds[i];
+        chip.textContent = supportId ? SUPPORTS[supportId].name : 'Empty Socket';
+        chip.addEventListener('click', () => {
+          if (supportId) {
+            slot.supportIds[i] = null;
+            this.markDirty();
+          }
+        });
+        supportRow.appendChild(chip);
+      }
+      body.appendChild(supportRow);
+
+      this.renderGemPicker(body, 'support', (chosenId) => {
+        const emptyIdx = slot.supportIds.findIndex((s) => s === null);
+        if (emptyIdx < 0) {
+          this.sim!.toasts.push({ text: 'Both support sockets are full.', life: 1.6 });
+          return;
+        }
+        slot.supportIds[emptyIdx] = chosenId;
+      });
+    } else {
+      const hint = document.createElement('div');
+      hint.style.fontSize = '12px';
+      hint.style.opacity = '0.75';
+      hint.style.marginBottom = '10px';
+      hint.textContent = `Socket ${keyLabels[this.selectedSkillSlot]} with an Uncut Skill Gem to choose an active skill.`;
+      body.appendChild(hint);
+
+      this.renderGemPicker(body, 'skill', (chosenId) => {
+        slot.skillId = chosenId;
+      });
+    }
+  }
+
+  /** Shared two-step picker: pick an uncut gem from inventory, then pick what to cut it into. */
+  private renderGemPicker(body: HTMLElement, kind: 'skill' | 'support', onChosen: (id: string) => void): void {
+    const player = this.sim!.player;
+    const gemBaseId = kind === 'skill' ? 'uncut_skill_gem' : 'uncut_support_gem';
+    const uncutGems = Array.from(player.inventory.items.values()).filter((it) => it.baseId === gemBaseId);
+
+    const gemTitle = document.createElement('div');
+    gemTitle.className = 'stat-section-title';
+    gemTitle.textContent = kind === 'skill' ? 'Uncut Skill Gems' : 'Uncut Support Gems';
+    body.appendChild(gemTitle);
+
+    if (uncutGems.length === 0) {
+      const none = document.createElement('div');
+      none.style.fontSize = '12px';
+      none.style.opacity = '0.6';
+      none.textContent = `No uncut ${kind} gems — find them as loot.`;
+      body.appendChild(none);
+      return;
+    }
+
+    const gemList = document.createElement('div');
+    gemList.className = 'gem-list';
+    gemList.style.marginBottom = '10px';
+    for (const gem of uncutGems) {
+      const row = document.createElement('div');
+      const selected = this.selectedGemInstanceId === gem.instanceId;
+      row.className = 'gem-row' + (selected ? ' active' : '');
+      row.innerHTML = `<span>${gem.name}</span><span style="opacity:0.6">${selected ? 'selected' : 'click to select'}</span>`;
+      row.addEventListener('click', () => {
+        this.selectedGemInstanceId = selected ? null : gem.instanceId;
+        this.render();
+      });
+      gemList.appendChild(row);
+    }
+    body.appendChild(gemList);
+
+    const listTitle = document.createElement('div');
+    listTitle.className = 'stat-section-title';
+    listTitle.textContent = kind === 'skill' ? `Cut into...` : 'Cut into...';
+    body.appendChild(listTitle);
 
     const list = document.createElement('div');
     list.className = 'gem-list';
-    for (const skill of Object.values(SKILLS)) {
-      const qualifies = this.qualifiesForSkill(player, skill);
+    const entries: [string, string, boolean][] = kind === 'skill'
+      ? Object.values(SKILLS).map((s) => [s.id, `${s.name} (lvl ${s.levelReq})`, this.qualifiesForSkill(player, s)])
+      : Object.values(SUPPORTS).map((s) => [s.id, s.name, player.level >= s.levelReq]);
+
+    for (const [id, label, qualifies] of entries) {
       const row = document.createElement('div');
-      row.className = 'gem-row' + (qualifies ? '' : ' locked');
-      row.innerHTML = `<span>${skill.name} <span style="opacity:0.6">(lvl ${skill.levelReq})</span></span><span style="opacity:0.7">${skill.tags.join(', ')}</span>`;
-      if (qualifies) {
+      const canPick = qualifies && this.selectedGemInstanceId;
+      row.className = 'gem-row' + (canPick ? '' : ' locked');
+      row.innerHTML = `<span>${label}</span>`;
+      if (canPick) {
         row.addEventListener('click', () => {
-          player.skillSlots[this.selectedSkillSlot].skillId = skill.id;
+          const removed = player.inventory.removeItem(this.selectedGemInstanceId!);
+          if (!removed) return;
+          onChosen(id);
+          this.selectedGemInstanceId = null;
           this.markDirty();
         });
       }
       list.appendChild(row);
     }
     body.appendChild(list);
-
-    const supportTitle = document.createElement('div');
-    supportTitle.className = 'stat-section-title';
-    supportTitle.textContent = 'Support Gems (2 slots per skill)';
-    body.appendChild(supportTitle);
-
-    const slot = player.skillSlots[this.selectedSkillSlot];
-    const supportRow = document.createElement('div');
-    supportRow.style.display = 'flex';
-    supportRow.style.gap = '8px';
-    supportRow.style.marginBottom = '8px';
-    for (let i = 0; i < slot.supportIds.length; i++) {
-      const chip = document.createElement('div');
-      chip.className = 'currency-chip';
-      const supportId = slot.supportIds[i];
-      chip.textContent = supportId ? SUPPORTS[supportId].name : 'Empty';
-      chip.addEventListener('click', () => {
-        slot.supportIds[i] = null;
-        this.markDirty();
-      });
-      supportRow.appendChild(chip);
-    }
-    body.appendChild(supportRow);
-
-    const supportList = document.createElement('div');
-    supportList.className = 'gem-list';
-    for (const support of Object.values(SUPPORTS)) {
-      const qualifies = player.level >= support.levelReq;
-      const row = document.createElement('div');
-      row.className = 'gem-row' + (qualifies ? '' : ' locked');
-      row.innerHTML = `<span>${support.name}</span><span style="opacity:0.7">${support.desc}</span>`;
-      if (qualifies) {
-        row.addEventListener('click', () => {
-          const emptyIdx = slot.supportIds.findIndex((s) => s === null);
-          slot.supportIds[emptyIdx >= 0 ? emptyIdx : 0] = support.id;
-          this.markDirty();
-        });
-      }
-      supportList.appendChild(row);
-    }
-    body.appendChild(supportList);
   }
 
   private qualifiesForSkill(player: Player, skill: SkillDef): boolean {
@@ -320,6 +411,7 @@ export class InventoryPanel {
     const p = this.sim!.player;
     const d = p.derived;
     const rows: [string, string][] = [
+      ['Name', p.name],
       ['Level', `${p.level}`],
       ['Class', p.classDef.name],
       ['Experience', `${p.xp}`],
@@ -378,51 +470,59 @@ export class InventoryPanel {
     return wrap;
   }
 
-  // ---------------------------------------------------------------- grid rendering
+  // ---------------------------------------------------------------- grid rendering + drag/drop
   private buildGrid(
     inv: Inventory,
-    onClick: (item: ItemInstance) => void,
+    kind: 'inventory' | 'stash',
     onRightClick?: (item: ItemInstance) => void,
     isEligible?: (item: ItemInstance) => boolean,
+    onClickOverride?: (item: ItemInstance) => void,
   ): HTMLElement {
+    const CELL = 46;
     const grid = document.createElement('div');
     grid.className = 'inv-grid';
-    grid.style.gridTemplateColumns = `repeat(${inv.width}, 46px)`;
-    grid.style.gridTemplateRows = `repeat(${inv.height}, 46px)`;
     grid.style.position = 'relative';
-    grid.style.width = `${inv.width * 46}px`;
-    grid.style.height = `${inv.height * 46}px`;
+    grid.style.width = `${inv.width * CELL}px`;
+    grid.style.height = `${inv.height * CELL}px`;
 
     for (let y = 0; y < inv.height; y++) {
       for (let x = 0; x < inv.width; x++) {
         const cell = document.createElement('div');
         cell.className = 'inv-cell';
         cell.style.position = 'absolute';
-        cell.style.left = `${x * 46}px`;
-        cell.style.top = `${y * 46}px`;
+        cell.style.left = `${x * CELL}px`;
+        cell.style.top = `${y * CELL}px`;
         grid.appendChild(cell);
       }
     }
 
-    const seen = new Set<string>();
+    grid.addEventListener('dragover', (e) => e.preventDefault());
+    grid.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const rect = grid.getBoundingClientRect();
+      const x = Math.floor((e.clientX - rect.left) / CELL);
+      const y = Math.floor((e.clientY - rect.top) / CELL);
+      this.handleGridDrop(inv, kind, x, y);
+    });
+
     for (const [instanceId, item] of inv.items) {
-      if (seen.has(instanceId)) continue;
-      seen.add(instanceId);
       const placement = inv.placements.get(instanceId);
       if (!placement) continue;
       const base = ITEM_BASES[item.baseId];
       const chip = document.createElement('div');
       chip.className = 'inv-item';
-      chip.style.left = `${placement.x * 46 + 1}px`;
-      chip.style.top = `${placement.y * 46 + 1}px`;
-      chip.style.width = `${base.gridW * 46 - 2}px`;
-      chip.style.height = `${base.gridH * 46 - 2}px`;
+      chip.style.left = `${placement.x * CELL + 1}px`;
+      chip.style.top = `${placement.y * CELL + 1}px`;
+      chip.style.width = `${base.gridW * CELL - 2}px`;
+      chip.style.height = `${base.gridH * CELL - 2}px`;
       chip.style.background = RARITY_COLOR[item.rarity];
       chip.textContent = shortName(item.name);
+      chip.draggable = true;
+      chip.addEventListener('dragstart', () => { this.dragSource = { instanceId, kind }; });
       if (isEligible && !isEligible(item)) {
         chip.style.opacity = '0.35';
       }
-      chip.addEventListener('click', () => onClick(item));
+      chip.addEventListener('click', () => onClickOverride?.(item));
       if (onRightClick) {
         chip.addEventListener('contextmenu', (e) => {
           e.preventDefault();
@@ -433,6 +533,108 @@ export class InventoryPanel {
       grid.appendChild(chip);
     }
     return grid;
+  }
+
+  private handleGridDrop(targetInv: Inventory, targetKind: 'inventory' | 'stash', x: number, y: number): void {
+    const src = this.dragSource;
+    this.dragSource = null;
+    if (!src) return;
+    const item = this.getItemFromSource(src);
+    if (!item) return;
+
+    if (src.kind === targetKind) {
+      targetInv.moveItem(item.instanceId, x, y);
+      this.markDirty();
+      return;
+    }
+
+    const removed = this.removeFromSource(src);
+    if (!removed) return;
+    if (!targetInv.place(removed, x, y) && !targetInv.addItem(removed)) {
+      this.revertToSource(src, removed);
+      this.sim!.toasts.push({ text: 'Not enough space.', life: 1.6 });
+    }
+    this.markDirty();
+  }
+
+  private handleEquipDrop(targetKey: EquipmentSlotKey): void {
+    const src = this.dragSource;
+    this.dragSource = null;
+    if (!src) return;
+    const item = this.getItemFromSource(src);
+    if (!item) return;
+    if (!this.isValidForSlot(item, targetKey)) {
+      this.sim!.toasts.push({ text: 'That item cannot go there.', life: 1.4 });
+      return;
+    }
+    const player = this.sim!.player;
+    const removed = this.removeFromSource(src);
+    if (!removed) return;
+    const current = player.equipment[targetKey];
+    player.equipment[targetKey] = removed;
+
+    if (current) {
+      if (src.kind === 'equipment' && src.slot) {
+        player.equipment[src.slot] = current;
+      } else {
+        const primary = src.kind === 'stash' ? player.stash : player.inventory;
+        const secondary = primary === player.inventory ? player.stash : player.inventory;
+        if (!primary.addItem(current) && !secondary.addItem(current)) {
+          player.equipment[targetKey] = current;
+          this.revertToSource(src, removed);
+          this.sim!.toasts.push({ text: 'Not enough space to swap.', life: 1.6 });
+        }
+      }
+    }
+    this.markDirty();
+  }
+
+  private isValidForSlot(item: ItemInstance, key: EquipmentSlotKey): boolean {
+    const base = ITEM_BASES[item.baseId];
+    switch (key) {
+      case 'weapon': return base.slot === 'weapon';
+      case 'offhand': return base.slot === 'offhand';
+      case 'helmet': return base.slot === 'helmet';
+      case 'body': return base.slot === 'body';
+      case 'gloves': return base.slot === 'gloves';
+      case 'boots': return base.slot === 'boots';
+      case 'belt': return base.slot === 'belt';
+      case 'amulet': return base.slot === 'amulet';
+      case 'ring1':
+      case 'ring2':
+        return base.slot === 'ring';
+      case 'flask1':
+        return base.slot === 'flask' && base.flaskKind === 'life';
+      case 'flask2':
+        return base.slot === 'flask' && base.flaskKind === 'mana';
+    }
+  }
+
+  private getItemFromSource(src: DragSource): ItemInstance | null {
+    const player = this.sim!.player;
+    if (src.kind === 'inventory') return player.inventory.items.get(src.instanceId) ?? null;
+    if (src.kind === 'stash') return player.stash.items.get(src.instanceId) ?? null;
+    if (src.kind === 'equipment' && src.slot) return player.equipment[src.slot];
+    return null;
+  }
+
+  private removeFromSource(src: DragSource): ItemInstance | null {
+    const player = this.sim!.player;
+    if (src.kind === 'inventory') return player.inventory.removeItem(src.instanceId);
+    if (src.kind === 'stash') return player.stash.removeItem(src.instanceId);
+    if (src.kind === 'equipment' && src.slot) {
+      const item = player.equipment[src.slot];
+      player.equipment[src.slot] = null;
+      return item;
+    }
+    return null;
+  }
+
+  private revertToSource(src: DragSource, item: ItemInstance): void {
+    const player = this.sim!.player;
+    if (src.kind === 'inventory') player.inventory.addItem(item);
+    else if (src.kind === 'stash') player.stash.addItem(item);
+    else if (src.kind === 'equipment' && src.slot) player.equipment[src.slot] = item;
   }
 
   private attachTooltip(el: HTMLElement, item: ItemInstance): void {
@@ -455,54 +657,19 @@ export class InventoryPanel {
     if (base.armorBase) lines.push(`Armour: ${base.armorBase}`);
     if (base.evasionBase) lines.push(`Evasion: ${base.evasionBase}`);
     if (base.esBase) lines.push(`Energy Shield: ${base.esBase}`);
+    if (base.flaskKind === 'life') lines.push(`Recovers ${base.flaskLife} Life over ${base.flaskDuration}s`);
+    if (base.flaskKind === 'mana') lines.push(`Recovers ${base.flaskMana} Mana over ${base.flaskDuration}s`);
     for (const a of item.affixes) lines.push(a.text);
-    lines.push(`<span style="opacity:0.5">Sell value: ${itemVendorValue(item)}g</span>`);
+    if (base.slot !== 'gem') lines.push(`<span style="opacity:0.5">Sell value: ${itemVendorValue(item)}g</span>`);
     return lines.join('<br/>');
   }
 
-  // ---------------------------------------------------------------- interactions
-  private tryEquip(item: ItemInstance): void {
-    const player = this.sim!.player;
+  private sellItem(item: ItemInstance): void {
     const base = ITEM_BASES[item.baseId];
-    let targetKey: EquipmentSlotKey | null = null;
-    if (base.slot === 'ring') targetKey = player.equipment.ring1 ? (player.equipment.ring2 ? 'ring1' : 'ring2') : 'ring1';
-    else if (base.slot === 'flask') {
-      const flaskKeys: EquipmentSlotKey[] = ['flask1', 'flask2', 'flask3', 'flask4'];
-      targetKey = flaskKeys.find((k) => !player.equipment[k]) ?? 'flask1';
-    } else if (base.slot === 'weapon') targetKey = 'weapon';
-    else if (base.slot === 'offhand') targetKey = 'offhand';
-    else targetKey = base.slot as EquipmentSlotKey;
-
-    if (!targetKey) return;
-    const removedFromInv = player.inventory.removeItem(item.instanceId);
-    if (!removedFromInv) return;
-    const current = player.equipment[targetKey];
-    player.equipment[targetKey] = removedFromInv;
-    if (current) {
-      if (!player.inventory.addItem(current)) {
-        // revert: no space to hold the swapped-out item
-        player.equipment[targetKey] = current;
-        player.inventory.addItem(removedFromInv);
-        this.sim!.toasts.push({ text: 'Not enough inventory space to swap.', life: 1.6 });
-      }
-    }
-    this.markDirty();
-  }
-
-  private unequip(key: EquipmentSlotKey): void {
-    const player = this.sim!.player;
-    const item = player.equipment[key];
-    if (!item) return;
-    if (!player.inventory.hasSpaceFor(item)) {
-      this.sim!.toasts.push({ text: 'Inventory is full.', life: 1.6 });
+    if (base.slot === 'gem') {
+      this.sim!.toasts.push({ text: 'Gems cannot be sold.', life: 1.6 });
       return;
     }
-    player.equipment[key] = null;
-    player.inventory.addItem(item);
-    this.markDirty();
-  }
-
-  private sellItem(item: ItemInstance): void {
     const player = this.sim!.player;
     const value = itemVendorValue(item);
     player.inventory.removeItem(item.instanceId);

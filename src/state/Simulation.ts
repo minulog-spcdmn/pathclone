@@ -27,8 +27,8 @@ import { maybeApplyAilments, tickStatusEffects } from '../systems/StatusEffects.
 import { castSkill, getSkillManaCost } from '../systems/SkillExecution.ts';
 import type { SkillContext } from '../systems/SkillExecution.ts';
 import { rollMonsterLoot } from '../systems/Loot.ts';
-import { rollRarity, generateItem } from '../systems/ItemGen.ts';
 import { ITEM_BASES } from '../data/items.ts';
+import type { ZoneExit } from '../world/Zone.ts';
 
 export interface FloatingText {
   pos: Vec2;
@@ -41,6 +41,18 @@ export interface FloatingText {
 export interface Toast {
   text: string;
   life: number;
+}
+
+export type HoverTarget =
+  | { kind: 'drop'; drop: ItemDrop }
+  | { kind: 'exit'; exit: ZoneExit }
+  | { kind: 'stash'; pos: Vec2 }
+  | { kind: 'waypoint'; pos: Vec2 };
+
+interface PendingInteraction {
+  targetPos: Vec2;
+  radius: number;
+  action: () => void;
 }
 
 export class Simulation {
@@ -61,12 +73,17 @@ export class Simulation {
   toasts: Toast[] = [];
 
   lastStatMap: StatMap = {};
-  private zoneChangeGraceTimer = 0;
   inputLocked = false; // true while a full-screen modal (character create etc) owns input
+  paused = false; // true while the pause menu is open — simulation fully halts
+
+  hoverTarget: HoverTarget | null = null;
+  private pendingInteraction: PendingInteraction | null = null;
 
   onLevelUp?: (levels: number) => void;
   onZoneChange?: (zoneId: string) => void;
   onDeath?: () => void;
+  onStashOpen?: () => void;
+  onWaypointOpen?: () => void;
 
   private skillCtx: SkillContext;
 
@@ -75,10 +92,10 @@ export class Simulation {
     this.tree = tree;
     this.camera = camera;
     this.input = input;
-    this.rng = new Rng(hashSeed(`${player.classId}_${Date.now()}`));
+    this.rng = new Rng(hashSeed(`${player.saveId}_${Date.now()}`));
     this.zone = generateZone(ZONES[player.currentZoneId] ?? ZONES.hub_town, this.rng.int(0, 1e9));
     this.player.pos = { ...this.zone.spawnPoint };
-    this.camera.centerOn(this.player.pos.x, this.player.pos.y);
+    this.camera.snapTo(this.player.pos.x, this.player.pos.y);
 
     this.skillCtx = {
       now: 0,
@@ -99,7 +116,6 @@ export class Simulation {
     };
 
     this.spawnZoneMonsters();
-    this.zoneChangeGraceTimer = 1.2;
   }
 
   changeZone(zoneId: string, arriveNear?: string): void {
@@ -119,9 +135,10 @@ export class Simulation {
     this.projectiles = [];
     this.drops = [];
     this.groundEffects = [];
+    this.pendingInteraction = null;
+    this.hoverTarget = null;
     this.spawnZoneMonsters();
-    this.camera.centerOn(this.player.pos.x, this.player.pos.y);
-    this.zoneChangeGraceTimer = 1.2;
+    this.camera.snapTo(this.player.pos.x, this.player.pos.y);
     this.onZoneChange?.(zoneId);
   }
 
@@ -301,30 +318,34 @@ export class Simulation {
 
   // ---- main loop ----
   update(dt: number): void {
+    if (this.paused) {
+      this.input.endFrame();
+      return;
+    }
     this.time += dt;
     this.skillCtx.now = this.time;
-    if (this.zoneChangeGraceTimer > 0) this.zoneChangeGraceTimer -= dt;
     this.refreshDerivedStats();
 
     if (!this.inputLocked) {
       this.handlePlayerInput(dt);
+    } else {
+      this.hoverTarget = null;
     }
     this.tickPlayerVitals(dt);
     this.updateProjectiles(dt);
     this.updateGroundEffects(dt);
     this.updateMonsters(dt);
     this.updateMinions(dt);
-    this.updateDrops();
     this.updateFloatingTexts(dt);
     this.updateToasts(dt);
-    this.checkZoneExits();
 
     this.monsters = this.monsters.filter((m) => !m.dead);
     this.minions = this.minions.filter((m) => !m.dead);
     this.projectiles = this.projectiles.filter((p) => !p.dead);
     this.groundEffects = this.groundEffects.filter((g) => !g.dead);
+    this.drops = this.drops.filter((d) => !d.dead);
 
-    this.camera.centerOn(this.player.pos.x, this.player.pos.y);
+    this.camera.centerOn(this.player.pos.x, this.player.pos.y, dt);
     this.input.endFrame();
   }
 
@@ -358,19 +379,33 @@ export class Simulation {
     }
     if (p.dodgeCooldown > 0) p.dodgeCooldown -= dt;
 
-    if (p.isDodging) {
-      p.dodgeTimer -= dt;
-      this.attemptMove(p, p.dodgeDir.x * 9 * dt, p.dodgeDir.y * 9 * dt);
-      if (p.dodgeTimer <= 0) p.isDodging = false;
-    } else {
-      let mx = 0;
-      let my = 0;
+    this.hoverTarget = this.computeHoverTarget(this.input.mouseX, this.input.mouseY);
+
+    let mx = 0;
+    let my = 0;
+    if (!p.isDodging) {
       if (this.input.isDown('KeyW') || this.input.isDown('ArrowUp')) my -= 1;
       if (this.input.isDown('KeyS') || this.input.isDown('ArrowDown')) my += 1;
       if (this.input.isDown('KeyA') || this.input.isDown('ArrowLeft')) mx -= 1;
       if (this.input.isDown('KeyD') || this.input.isDown('ArrowRight')) mx += 1;
-      const moving = mx !== 0 || my !== 0;
-      if (moving) {
+    }
+    const wasdHeld = mx !== 0 || my !== 0;
+    if (wasdHeld) this.pendingInteraction = null; // manual movement always takes back control
+
+    // A fresh left-click on something interactive queues an auto-walk-and-interact,
+    // taking priority over that click being spent on the LMB skill slot.
+    if (!p.isDodging && this.input.mousePressed && this.hoverTarget) {
+      this.pendingInteraction = this.buildPendingInteraction(this.hoverTarget);
+    }
+
+    if (p.isDodging) {
+      p.dodgeTimer -= dt;
+      this.attemptMove(p, p.dodgeDir.x * 9 * dt, p.dodgeDir.y * 9 * dt);
+      if (p.dodgeTimer <= 0) p.isDodging = false;
+    } else if (this.pendingInteraction) {
+      this.advancePendingInteraction(dt);
+    } else {
+      if (wasdHeld) {
         const len = Math.hypot(mx, my);
         mx /= len;
         my /= len;
@@ -380,35 +415,120 @@ export class Simulation {
         p.isDodging = true;
         p.dodgeTimer = 0.26;
         p.dodgeCooldown = 0.9;
-        p.dodgeDir = moving ? { x: mx, y: my } : p.lastMoveDir;
+        p.dodgeDir = wasdHeld ? { x: mx, y: my } : p.lastMoveDir;
       } else {
         const status = tickStatusEffects(p, this.time, dt);
         if (!status.frozen) {
-          const speed = 3.3 * p.derived.movementSpeed * (1 - Math.min(80, status.chillPercent) / 100);
-          if (moving) this.attemptMove(p, mx * speed * dt, my * speed * dt);
+          const sprinting = wasdHeld && (this.input.isDown('ShiftLeft') || this.input.isDown('ShiftRight'));
+          const speed = 3.3 * p.derived.movementSpeed * (sprinting ? 1.6 : 1) * (1 - Math.min(80, status.chillPercent) / 100);
+          if (wasdHeld) this.attemptMove(p, mx * speed * dt, my * speed * dt);
         }
         this.applyDotDamage(p, status.dotDamage);
       }
     }
 
     const mouseWorld = this.camera.screenToWorld(this.input.mouseX, this.input.mouseY);
-    p.facing = angleTo(p.pos, mouseWorld);
+    if (!p.isDodging && !this.pendingInteraction) {
+      p.facing = angleTo(p.pos, mouseWorld);
+    }
 
-    if (!p.isDodging) {
+    const sprintingNow = !p.isDodging && wasdHeld && (this.input.isDown('ShiftLeft') || this.input.isDown('ShiftRight'));
+    if (!p.isDodging && !sprintingNow) {
       const held = [
-        this.input.mouseDown || this.input.isDown('Digit1'),
-        this.input.mouseRightDown || this.input.isDown('Digit2'),
-        this.input.isDown('Digit3'),
-        this.input.isDown('Digit4'),
+        this.input.mouseDown && !this.hoverTarget,
+        this.input.mouseMiddleDown,
+        this.input.mouseRightDown,
+        this.input.isDown('KeyQ'),
+        this.input.isDown('KeyE'),
+        this.input.isDown('KeyR'),
+        this.input.isDown('KeyT'),
       ];
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < held.length; i++) {
         if (held[i]) this.tryCastSlot(i, mouseWorld);
       }
     }
 
-    for (let i = 0; i < 4; i++) {
-      const key = `Digit${5 + i}`;
-      if (this.input.wasPressed(key)) this.useFlask(i);
+    if (this.input.wasPressed('Digit1')) this.useFlask(0);
+    if (this.input.wasPressed('Digit2')) this.useFlask(1);
+  }
+
+  private computeHoverTarget(sx: number, sy: number): HoverTarget | null {
+    let bestDrop: ItemDrop | null = null;
+    let bestDist = 42;
+    for (const d of this.drops) {
+      const s = this.camera.worldToScreen(d.pos.x, d.pos.y, 0.5);
+      if (!s) continue;
+      const dist = Math.hypot(s.x - sx, s.y - sy);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestDrop = d;
+      }
+    }
+    if (bestDrop) return { kind: 'drop', drop: bestDrop };
+
+    for (const deco of this.zone.decorations) {
+      if (deco.kind !== 'stash' && deco.kind !== 'waypoint') continue;
+      const s = this.camera.worldToScreen(deco.pos.x, deco.pos.y, 0.7);
+      if (!s) continue;
+      if (Math.hypot(s.x - sx, s.y - sy) < 50) {
+        return deco.kind === 'stash' ? { kind: 'stash', pos: deco.pos } : { kind: 'waypoint', pos: deco.pos };
+      }
+    }
+
+    for (const exit of this.zone.exits) {
+      const s = this.camera.worldToScreen(exit.pos.x, exit.pos.y, 0.3);
+      if (!s) continue;
+      if (Math.hypot(s.x - sx, s.y - sy) < 55) return { kind: 'exit', exit };
+    }
+
+    return null;
+  }
+
+  private buildPendingInteraction(hover: HoverTarget): PendingInteraction {
+    switch (hover.kind) {
+      case 'drop':
+        return { targetPos: hover.drop.pos, radius: 0.9, action: () => this.pickupDrop(hover.drop) };
+      case 'exit': {
+        const toId = hover.exit.toZoneId;
+        const fromId = this.zone.def.id;
+        return { targetPos: hover.exit.pos, radius: 1.3, action: () => this.changeZone(toId, fromId) };
+      }
+      case 'stash':
+        return { targetPos: hover.pos, radius: 1.8, action: () => this.onStashOpen?.() };
+      case 'waypoint':
+        return { targetPos: hover.pos, radius: 1.8, action: () => this.onWaypointOpen?.() };
+    }
+  }
+
+  private advancePendingInteraction(dt: number): void {
+    const interaction = this.pendingInteraction;
+    if (!interaction) return;
+    const p = this.player;
+    const d = distance(p.pos, interaction.targetPos);
+    if (d <= interaction.radius) {
+      this.pendingInteraction = null;
+      interaction.action();
+      return;
+    }
+    const dir = angleTo(p.pos, interaction.targetPos);
+    p.facing = dir;
+    const speed = 3.3 * p.derived.movementSpeed;
+    this.attemptMove(p, Math.cos(dir) * speed * dt, Math.sin(dir) * speed * dt);
+  }
+
+  private pickupDrop(drop: ItemDrop): void {
+    if (drop.dead) return;
+    if (drop.item) {
+      if (this.player.inventory.hasSpaceFor(drop.item)) {
+        this.player.inventory.addItem(drop.item);
+        this.toasts.push({ text: `Picked up ${drop.item.name}`, life: 1.6 });
+        drop.dead = true;
+      } else {
+        this.toasts.push({ text: 'Inventory is full', life: 1.6 });
+      }
+    } else {
+      this.player.gold += drop.gold;
+      drop.dead = true;
     }
   }
 
@@ -466,22 +586,19 @@ export class Simulation {
   }
 
   private useFlask(slotIndex: number): void {
-    const key = (`flask${slotIndex + 1}`) as 'flask1' | 'flask2' | 'flask3' | 'flask4';
+    const key = (`flask${slotIndex + 1}`) as 'flask1' | 'flask2';
     const item = this.player.equipment[key];
     if (!item) return;
     const baseDef = ITEM_BASES[item.baseId];
     if (!baseDef) return;
-    const cdKey = key;
-    if ((this.player.flaskCooldowns.get(cdKey) ?? 0) > 0) return;
+    if ((this.player.flaskCooldowns.get(key) ?? 0) > 0) return;
     const duration = baseDef.flaskDuration ?? 3;
     if (baseDef.flaskKind === 'life' && baseDef.flaskLife) {
       this.player.flaskHeals.push({ type: 'life', remaining: duration, perSecond: baseDef.flaskLife / duration });
     } else if (baseDef.flaskKind === 'mana' && baseDef.flaskMana) {
       this.player.flaskHeals.push({ type: 'mana', remaining: duration, perSecond: baseDef.flaskMana / duration });
-    } else if (baseDef.flaskKind === 'utility' && baseDef.flaskUtilityStats) {
-      this.player.buffs.push({ id: `flask_${key}`, stats: baseDef.flaskUtilityStats, expiresAt: this.time + duration, label: item.name });
     }
-    this.player.flaskCooldowns.set(cdKey, duration);
+    this.player.flaskCooldowns.set(key, duration);
     this.toasts.push({ text: `Used ${item.name}`, life: 1.5 });
   }
 
@@ -739,25 +856,6 @@ export class Simulation {
     return best;
   }
 
-  private updateDrops(): void {
-    for (const drop of this.drops) {
-      if (drop.dead) continue;
-      if (distance(drop.pos, this.player.pos) < 0.9) {
-        if (drop.item) {
-          if (this.player.inventory.hasSpaceFor(drop.item)) {
-            this.player.inventory.addItem(drop.item);
-            this.toasts.push({ text: `Picked up ${drop.item.name}`, life: 1.6 });
-            drop.dead = true;
-          }
-        } else {
-          this.player.gold += drop.gold;
-          drop.dead = true;
-        }
-      }
-    }
-    this.drops = this.drops.filter((d) => !d.dead);
-  }
-
   private updateFloatingTexts(dt: number): void {
     for (const t of this.floatingTexts) {
       t.pos.y += t.vy * dt;
@@ -769,21 +867,5 @@ export class Simulation {
   private updateToasts(dt: number): void {
     for (const t of this.toasts) t.life -= dt;
     this.toasts = this.toasts.filter((t) => t.life > 0);
-  }
-
-  private checkZoneExits(): void {
-    if (this.zoneChangeGraceTimer > 0) return;
-    for (const exit of this.zone.exits) {
-      if (distance(this.player.pos, exit.pos) < exit.radius) {
-        this.changeZone(exit.toZoneId, this.zone.def.id);
-        return;
-      }
-    }
-  }
-
-  rollTestDrop(): void {
-    const rarity = rollRarity(this.rng, 0);
-    const item = generateItem('one_hand_sword_t1', this.zone.def.zoneLevel, rarity, this.rng);
-    this.drops.push(new ItemDrop(this.player.pos, item, this.time));
   }
 }

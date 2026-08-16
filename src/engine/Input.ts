@@ -4,8 +4,10 @@ export class Input {
   mouseX = 0;
   mouseY = 0;
   mouseDown = false;
+  mouseMiddleDown = false;
   mouseRightDown = false;
   mousePressed = false;
+  mouseMiddlePressed = false;
   mouseRightPressed = false;
   wheelDelta = 0;
 
@@ -26,6 +28,11 @@ export class Input {
         this.mouseDown = true;
         this.mousePressed = true;
       }
+      if (e.button === 1) {
+        this.mouseMiddleDown = true;
+        this.mouseMiddlePressed = true;
+        e.preventDefault(); // stop browser autoscroll cursor
+      }
       if (e.button === 2) {
         this.mouseRightDown = true;
         this.mouseRightPressed = true;
@@ -33,9 +40,11 @@ export class Input {
     });
     window.addEventListener('mouseup', (e) => {
       if (e.button === 0) this.mouseDown = false;
+      if (e.button === 1) this.mouseMiddleDown = false;
       if (e.button === 2) this.mouseRightDown = false;
     });
     target.addEventListener('contextmenu', (e) => e.preventDefault());
+    target.addEventListener('auxclick', (e) => e.preventDefault());
     target.addEventListener(
       'wheel',
       (e) => {
@@ -58,6 +67,7 @@ export class Input {
   endFrame(): void {
     this.keysPressed.clear();
     this.mousePressed = false;
+    this.mouseMiddlePressed = false;
     this.mouseRightPressed = false;
     this.wheelDelta = 0;
   }

@@ -12,11 +12,20 @@ html, body {
 }
 #app { width: 100%; height: 100%; position: relative; }
 
+#game-root { position: absolute; inset: 0; }
+
 canvas#game-canvas {
   position: absolute;
   inset: 0;
   display: block;
   cursor: crosshair;
+}
+
+#world-labels {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
 }
 
 .hidden { display: none !important; }
@@ -54,6 +63,17 @@ canvas#game-canvas {
   background: linear-gradient(rgba(140,200,255,0.55), rgba(90,150,220,0.35));
   transition: height 0.15s ease-out;
 }
+.orb-value {
+  position: absolute;
+  top: 50%; left: 0; right: 0;
+  transform: translateY(-50%);
+  text-align: center;
+  font-size: 17px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 0 1px 3px #000, 0 0 8px rgba(0,0,0,0.6);
+  z-index: 2;
+}
 .orb-label {
   position: absolute;
   bottom: -20px;
@@ -64,47 +84,51 @@ canvas#game-canvas {
   text-shadow: 0 1px 2px #000;
 }
 
-#skillbar {
+#actionbar {
   position: absolute;
-  bottom: 24px;
+  bottom: 22px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 8px;
+  align-items: flex-end;
+  gap: 16px;
 }
-.skill-slot {
-  width: 52px; height: 52px;
-  border-radius: 8px;
-  background: rgba(20,16,10,0.85);
+#skillbar, #flaskbar { display: flex; gap: 7px; }
+
+.skill-slot, .flask-slot {
+  width: 54px; height: 54px;
+  border-radius: 9px;
+  background: linear-gradient(#241d13, #16110a);
   border: 2px solid #4a3f2a;
   display: flex; align-items: center; justify-content: center;
   font-size: 10px;
   text-align: center;
   color: #d8c88a;
   position: relative;
-  cursor: pointer;
+  cursor: default;
+  box-shadow: 0 3px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05);
 }
-.skill-slot .cd-overlay {
+.flask-slot { width: 46px; }
+.skill-slot .cd-overlay, .flask-slot .cd-overlay {
   position: absolute; inset: 0;
-  background: rgba(0,0,0,0.65);
-  border-radius: 6px;
+  background: rgba(0,0,0,0.68);
+  border-radius: 7px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 14px;
+  font-size: 13px;
   color: #fff;
 }
-.skill-slot .key-hint {
-  position: absolute; top: -18px; left: 50%; transform: translateX(-50%);
-  font-size: 11px; color: #a89968;
+.skill-slot .key-hint, .flask-slot .key-hint {
+  position: absolute; top: -19px; left: 50%; transform: translateX(-50%);
+  font-size: 10px; color: #a89968;
+  background: rgba(10,8,6,0.75);
+  padding: 0 4px;
+  border-radius: 3px;
+  white-space: nowrap;
 }
-.flask-slot {
-  width: 42px; height: 52px;
-  border-radius: 6px;
-  background: rgba(20,16,10,0.85);
-  border: 2px solid #4a3f2a;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 9px;
-  color: #d8c88a;
-  position: relative;
+.skill-slot .label, .flask-slot .label {
+  padding: 0 3px;
+  line-height: 1.15;
+  word-break: break-word;
 }
 
 #xpbar {
@@ -112,32 +136,66 @@ canvas#game-canvas {
   bottom: 4px;
   left: 50%;
   transform: translateX(-50%);
-  width: 420px;
-  height: 8px;
+  width: 460px;
+  max-width: 90vw;
+  height: 9px;
   background: rgba(20,16,10,0.85);
   border: 1px solid #4a3f2a;
-  border-radius: 4px;
-  overflow: hidden;
+  border-radius: 5px;
+  overflow: visible;
 }
-#xpbar-fill { height: 100%; background: linear-gradient(90deg, #7a5ac0, #b090e0); }
+#xpbar-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #7a5ac0, #b090e0); }
+#xpbar-label {
+  position: absolute; top: -17px; left: 50%; transform: translateX(-50%);
+  font-size: 10px; color: #a89968; white-space: nowrap;
+}
 
 #toplbar {
   position: absolute;
-  top: 12px; left: 50%; transform: translateX(-50%);
-  display: flex; gap: 18px;
+  top: 14px; left: 50%; transform: translateX(-50%);
   font-size: 13px;
   color: #cfc4a0;
-  text-shadow: 0 1px 2px #000;
+  text-shadow: 0 1px 3px #000;
+  background: rgba(10,8,6,0.55);
+  padding: 5px 16px;
+  border-radius: 6px;
+  border: 1px solid rgba(90,74,42,0.6);
 }
 
 #minimap {
   position: absolute;
-  top: 12px; right: 12px;
-  width: 160px; height: 160px;
+  top: 14px; right: 14px;
+  width: 168px; height: 168px;
   border-radius: 8px;
   border: 2px solid #4a3f2a;
   background: rgba(10,8,6,0.7);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.5);
 }
+
+#interact-hint {
+  position: absolute;
+  transform: translate(18px, 18px);
+  background: rgba(10,8,6,0.9);
+  border: 1px solid #6a5a3a;
+  color: #f0e0b0;
+  padding: 4px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 50;
+}
+
+.world-label {
+  position: absolute;
+  top: 0; left: 0;
+  font-size: 12px;
+  font-weight: bold;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 0 6px rgba(0,0,0,0.6);
+  pointer-events: none;
+}
+.world-label-boss { font-size: 15px; letter-spacing: 0.5px; }
 
 #toasts {
   position: absolute;
@@ -152,15 +210,6 @@ canvas#game-canvas {
   border-radius: 6px;
   font-size: 13px;
   color: #e8dfc8;
-}
-
-#panel-hints {
-  position: absolute;
-  bottom: 24px;
-  left: 24px;
-  font-size: 11px;
-  color: #8a7f60;
-  line-height: 1.5;
 }
 
 /* ---------- Modal panels ---------- */
@@ -343,10 +392,36 @@ canvas#game-canvas {
 }
 .gem-row:hover { border-color: #6a5a3a; }
 .gem-row.locked { opacity: 0.4; cursor: not-allowed; }
+.gem-row.active { border-color: #e0c878; background: rgba(224,200,120,0.15); }
 
-#controls-help {
-  position: absolute;
-  top: 12px; left: 12px;
-  font-size: 11px;
-  color: #8a7f60;
+.inv-item, .equip-item { cursor: grab; }
+.inv-item:active, .equip-item:active { cursor: grabbing; }
+.equip-slot.drag-over { border-color: #e0c878; background: rgba(224,200,120,0.12); }
+
+.char-row {
+  display: flex; align-items: center; justify-content: space-between;
+  background: rgba(20,16,10,0.85);
+  border: 2px solid #4a3f2a;
+  border-radius: 8px;
+  padding: 12px 16px;
 }
+.char-row-info { display: flex; flex-direction: column; gap: 3px; text-align: left; }
+.char-row-name { font-size: 17px; font-weight: bold; }
+.char-row-meta { font-size: 12px; color: #a89968; }
+.char-row-actions { display: flex; gap: 8px; }
+.char-delete-confirm { border-color: #c04040 !important; color: #ff9a8a !important; }
+
+.name-input {
+  background: rgba(20,16,10,0.85);
+  border: 2px solid #4a3f2a;
+  color: #f0e0b0;
+  font-family: inherit;
+  font-size: 20px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  text-align: center;
+  width: 320px;
+  max-width: 90vw;
+  letter-spacing: 1px;
+}
+.name-input:focus { outline: none; border-color: #8a7040; }

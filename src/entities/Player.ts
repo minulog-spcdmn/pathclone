@@ -49,6 +49,9 @@ export function xpForLevel(level: number): number {
 }
 
 export class Player extends Entity {
+  saveId: string;
+  name: string;
+  createdAt: number;
   classId: ClassId;
   level = 1;
   xp = 0;
@@ -64,12 +67,8 @@ export class Player extends Entity {
   gold = 0;
   currencies: Currencies = emptyCurrencies();
 
-  skillSlots: SkillSlot[] = [
-    { skillId: null, supportIds: [null, null] },
-    { skillId: null, supportIds: [null, null] },
-    { skillId: null, supportIds: [null, null] },
-    { skillId: null, supportIds: [null, null] },
-  ];
+  /** 7 slots matching the keybinds: LMB, MMB, RMB, Q, E, R, T. */
+  skillSlots: SkillSlot[] = Array.from({ length: 7 }, () => ({ skillId: null, supportIds: [null, null] }));
 
   life = 1;
   maxLife = 1;
@@ -100,8 +99,11 @@ export class Player extends Entity {
   killCount = 0;
   deaths = 0;
 
-  constructor(classId: ClassId, pos: Vec2) {
+  constructor(classId: ClassId, pos: Vec2, name = 'Exile', saveId?: string) {
     super(pos);
+    this.saveId = saveId ?? `char_${Date.now().toString(36)}_${Math.round(Math.random() * 1e6).toString(36)}`;
+    this.name = name;
+    this.createdAt = Date.now();
     this.classId = classId;
     this.team = 'player';
     this.radius = 0.4;

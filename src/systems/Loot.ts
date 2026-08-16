@@ -12,9 +12,18 @@ export interface LootRoll {
   currency: Partial<Record<keyof Currencies, number>>;
 }
 
+const EQUIPMENT_BASES = ITEM_BASE_LIST.filter((b) => b.slot !== 'flask' && b.slot !== 'gem');
+const FLASK_BASES = ITEM_BASE_LIST.filter((b) => b.slot === 'flask');
+
 function pickBaseForLevel(rng: Rng, zoneLevel: number): string {
-  const eligible = ITEM_BASE_LIST.filter((b) => b.reqLevel <= zoneLevel + 3 && b.reqLevel >= Math.max(1, zoneLevel - 12));
-  const pool = eligible.length > 0 ? eligible : ITEM_BASE_LIST;
+  const eligible = EQUIPMENT_BASES.filter((b) => b.reqLevel <= zoneLevel + 3 && b.reqLevel >= Math.max(1, zoneLevel - 12));
+  const pool = eligible.length > 0 ? eligible : EQUIPMENT_BASES;
+  return rng.pick(pool).id;
+}
+
+function pickFlaskForLevel(rng: Rng, zoneLevel: number): string {
+  const eligible = FLASK_BASES.filter((b) => b.reqLevel <= zoneLevel + 3 && b.reqLevel >= Math.max(1, zoneLevel - 14));
+  const pool = eligible.length > 0 ? eligible : FLASK_BASES;
   return rng.pick(pool).id;
 }
 
@@ -56,6 +65,18 @@ export function rollMonsterLoot(def: MonsterDef, zoneLevel: number, rng: Rng): L
   for (let i = 0; i < currencyRolls; i++) {
     const key = rng.weighted(CURRENCY_KEYS.map((k) => [k, CURRENCY_WEIGHTS[k]] as const));
     currency[key] = (currency[key] ?? 0) + 1;
+  }
+
+  const flaskChance = def.isBoss ? 1 : 0.045;
+  if (rng.chance(flaskChance) && FLASK_BASES.length > 0) {
+    items.push(generateItem(pickFlaskForLevel(rng, zoneLevel), zoneLevel, 'normal', rng));
+  }
+
+  const gemChance = def.isBoss ? 1 : 0.05;
+  const gemRolls = def.isBoss ? 2 : rng.chance(gemChance) ? 1 : 0;
+  for (let i = 0; i < gemRolls; i++) {
+    const gemBaseId = rng.chance(0.55) ? 'uncut_skill_gem' : 'uncut_support_gem';
+    items.push(generateItem(gemBaseId, zoneLevel, 'normal', rng));
   }
 
   return { gold, items, currency };

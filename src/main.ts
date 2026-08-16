@@ -2,134 +2,139 @@ import './style.css';
 import { Camera } from './engine/Camera.ts';
 import { Input } from './engine/Input.ts';
 import { GameLoop } from './engine/Game.ts';
-import { Rng } from './engine/Random.ts';
-import { Player } from './entities/Player.ts';
-import type { ClassId } from './data/classes.ts';
 import { generatePassiveTree } from './data/passiveTree.ts';
 import { Simulation } from './state/Simulation.ts';
-import { WorldRenderer } from './render/WorldRenderer.ts';
+import { Scene3D } from './render/Scene3D.ts';
 import { Hud } from './ui/Hud.ts';
 import { InventoryPanel } from './ui/InventoryPanel.ts';
 import { PassiveTreeUI } from './ui/PassiveTreeUI.ts';
-import { mountCharacterCreate } from './ui/CharacterCreate.ts';
-import { saveGame, loadGame, hasSave, clearSave } from './state/SaveManager.ts';
-import { generateItem } from './systems/ItemGen.ts';
+import { PauseMenu } from './ui/PauseMenu.ts';
+import { WaypointPanel } from './ui/WaypointPanel.ts';
+import { mountStartFlow } from './ui/StartFlow.ts';
+import { saveCharacter } from './state/SaveManager.ts';
+import type { Player } from './entities/Player.ts';
+import type { Zone } from './world/Zone.ts';
 
 const app = document.getElementById('app')!;
 const tree = generatePassiveTree();
 
-function grantStartingGear(player: Player, rng: Rng): void {
-  const weapon = generateItem(player.classDef.startWeaponId, 1, 'normal', rng);
-  player.equipment.weapon = weapon;
-
-  const attrs = player.classDef.baseAttrs;
-  const archetype = attrs.strength >= attrs.dexterity && attrs.strength >= attrs.intelligence
-    ? 'str' : attrs.dexterity >= attrs.intelligence ? 'dex' : 'int';
-  const gearFor = (slot: string) => `${slot}_${archetype}_t1`;
-  for (const slot of ['helmet', 'body', 'gloves', 'boots']) {
-    const baseId = gearFor(slot);
-    player.equipment[slot as 'helmet' | 'body' | 'gloves' | 'boots'] = generateItem(baseId, 1, 'normal', rng);
-  }
-  player.equipment.flask1 = generateItem('flask_life_t1', 1, 'normal', rng);
-  player.equipment.flask2 = generateItem('flask_mana_t1', 1, 'normal', rng);
-  player.gold = 20;
-}
-
 function startGame(player: Player): void {
+  const container = document.createElement('div');
+  container.id = 'game-root';
+  app.appendChild(container);
+
   const canvas = document.createElement('canvas');
   canvas.id = 'game-canvas';
-  app.appendChild(canvas);
-  const ctx = canvas.getContext('2d')!;
+  container.appendChild(canvas);
+
+  const labelLayer = document.createElement('div');
+  labelLayer.id = 'world-labels';
+  container.appendChild(labelLayer);
 
   const camera = new Camera();
   const input = new Input(canvas);
   const sim = new Simulation(player, tree, camera, input);
 
-  const renderer = new WorldRenderer(ctx, camera);
-  const hud = new Hud(app);
-  const invPanel = new InventoryPanel(app);
-  const treeUI = new PassiveTreeUI(app);
+  const scene = new Scene3D(canvas, camera, labelLayer);
+  let lastZone: Zone | null = null;
+
+  const hud = new Hud(container);
+  const invPanel = new InventoryPanel(container);
+  const treeUI = new PassiveTreeUI(container);
+  const pauseMenu = new PauseMenu(container);
+  const waypointPanel = new WaypointPanel(container);
 
   function resize(): void {
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    canvas.width = window.innerWidth * dpr;
-    canvas.height = window.innerHeight * dpr;
-    canvas.style.width = `${window.innerWidth}px`;
-    canvas.style.height = `${window.innerHeight}px`;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    camera.viewW = window.innerWidth;
-    camera.viewH = window.innerHeight;
+    scene.resize(window.innerWidth, window.innerHeight);
   }
   window.addEventListener('resize', resize);
   resize();
 
-  const closeAllPanels = () => {
+  const anyPanelOpen = (): boolean => invPanel.isVisible() || treeUI.isVisible() || waypointPanel.isVisible();
+  const closeAllPanels = (): void => {
     invPanel.hide();
     treeUI.hide();
+    waypointPanel.hide();
     sim.inputLocked = false;
   };
-  invPanel.onClose = () => { sim.inputLocked = treeUI.isVisible(); };
-  treeUI.onClose = () => { sim.inputLocked = invPanel.isVisible(); };
-  invPanel.onDirty = () => saveGame(sim.player);
-  treeUI.onDirty = () => saveGame(sim.player);
+  invPanel.onClose = () => { sim.inputLocked = anyPanelOpen(); };
+  treeUI.onClose = () => { sim.inputLocked = anyPanelOpen(); };
+  waypointPanel.onClose = () => { sim.inputLocked = anyPanelOpen(); };
+  invPanel.onDirty = () => saveCharacter(sim.player);
+  treeUI.onDirty = () => saveCharacter(sim.player);
 
-  window.addEventListener('keydown', (e) => {
+  sim.onStashOpen = () => {
+    treeUI.hide();
+    waypointPanel.hide();
+    invPanel.show(sim, 'stash');
+    sim.inputLocked = true;
+  };
+  sim.onWaypointOpen = () => {
+    invPanel.hide();
+    treeUI.hide();
+    waypointPanel.show(sim);
+    sim.inputLocked = true;
+  };
+  sim.onDeath = () => hud.showDeath();
+  sim.onLevelUp = () => hud.showLevelUp();
+  sim.onZoneChange = () => saveCharacter(sim.player);
+
+  const togglePause = (): void => {
+    if (pauseMenu.isVisible()) {
+      pauseMenu.hide();
+      sim.paused = false;
+    } else if (!anyPanelOpen()) {
+      pauseMenu.show();
+      sim.paused = true;
+    }
+  };
+  pauseMenu.onResume = togglePause;
+  pauseMenu.onSaveAndExit = () => {
+    saveCharacter(sim.player);
+    teardown();
+    boot();
+  };
+
+  const keydownHandler = (e: KeyboardEvent): void => {
+    if (pauseMenu.isVisible() && e.code !== 'Escape') return;
     if (e.code === 'KeyI') {
-      if (invPanel.isVisible()) { invPanel.hide(); sim.inputLocked = treeUI.isVisible(); }
-      else { treeUI.hide(); invPanel.show(sim); sim.inputLocked = true; }
-    } else if (e.code === 'KeyT') {
-      if (treeUI.isVisible()) { treeUI.hide(); sim.inputLocked = invPanel.isVisible(); }
-      else { invPanel.hide(); treeUI.show(sim); sim.inputLocked = true; }
+      if (invPanel.isVisible()) { invPanel.hide(); sim.inputLocked = anyPanelOpen(); }
+      else { treeUI.hide(); waypointPanel.hide(); invPanel.show(sim, 'inventory'); sim.inputLocked = true; }
+    } else if (e.code === 'KeyP') {
+      if (treeUI.isVisible()) { treeUI.hide(); sim.inputLocked = anyPanelOpen(); }
+      else { invPanel.hide(); waypointPanel.hide(); treeUI.show(sim); sim.inputLocked = true; }
     } else if (e.code === 'KeyC') {
       treeUI.hide();
+      waypointPanel.hide();
       invPanel.show(sim, 'character');
       sim.inputLocked = true;
     } else if (e.code === 'Escape') {
-      closeAllPanels();
+      if (anyPanelOpen()) closeAllPanels();
+      else togglePause();
     }
-  });
-
-  sim.onDeath = () => hud.showDeath();
-  sim.onLevelUp = () => hud.showLevelUp();
-  sim.onZoneChange = () => saveGame(sim.player);
+  };
+  window.addEventListener('keydown', keydownHandler);
 
   let saveTimer = 0;
   const loop = new GameLoop(
     (dt) => {
       sim.update(dt);
-      saveTimer += dt;
-      if (saveTimer > 8) {
-        saveTimer = 0;
-        saveGame(sim.player);
+      if (!sim.paused) {
+        saveTimer += dt;
+        if (saveTimer > 8) {
+          saveTimer = 0;
+          saveCharacter(sim.player);
+        }
       }
     },
     () => {
-      ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.fillStyle = '#050403';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.restore();
-
-      renderer.drawFloor(sim.zone);
-      renderer.drawDecorations(sim.zone);
-      renderer.drawExits(sim.zone);
-      renderer.drawGroundEffects(sim.groundEffects, sim.time);
-      renderer.drawItemDrops(sim.drops, sim.time);
-
-      type DepthEntry = { depth: number; draw: () => void };
-      const entries: DepthEntry[] = [];
-      entries.push({ depth: renderer.worldDepth(sim.player.pos.x, sim.player.pos.y), draw: () => renderer.drawEntity('player', sim.player, { now: sim.time }) });
-      for (const m of sim.monsters) {
-        entries.push({ depth: renderer.worldDepth(m.pos.x, m.pos.y), draw: () => renderer.drawEntity('monster', m, { now: sim.time }) });
+      if (lastZone !== sim.zone) {
+        lastZone = sim.zone;
+        scene.buildZone(sim.zone);
       }
-      for (const m of sim.minions) {
-        entries.push({ depth: renderer.worldDepth(m.pos.x, m.pos.y), draw: () => renderer.drawEntity('minion', m, { now: sim.time }) });
-      }
-      entries.sort((a, b) => a.depth - b.depth);
-      for (const e of entries) e.draw();
-
-      renderer.drawProjectiles(sim.projectiles);
-      renderer.drawFloatingTexts(sim.floatingTexts);
+      scene.syncFrame(sim);
+      scene.render();
+      canvas.style.cursor = sim.hoverTarget ? 'pointer' : 'crosshair';
 
       hud.update(sim, loop.step);
       treeUI.render();
@@ -137,29 +142,26 @@ function startGame(player: Player): void {
   );
   loop.start();
 
-  window.addEventListener('beforeunload', () => saveGame(sim.player));
-  window.addEventListener('pagehide', () => saveGame(sim.player));
-}
+  function teardown(): void {
+    loop.stop();
+    window.removeEventListener('resize', resize);
+    window.removeEventListener('keydown', keydownHandler);
+    window.removeEventListener('beforeunload', saveOnUnload);
+    window.removeEventListener('pagehide', saveOnUnload);
+    container.remove();
+  }
 
-function newCharacter(classId: ClassId): void {
-  const rng = new Rng(Date.now());
-  const player = new Player(classId, { x: 0, y: 0 });
-  grantStartingGear(player, rng);
-  startGame(player);
+  function saveOnUnload(): void {
+    saveCharacter(sim.player);
+  }
+  window.addEventListener('beforeunload', saveOnUnload);
+  window.addEventListener('pagehide', saveOnUnload);
 }
 
 function boot(): void {
-  if (hasSave()) {
-    const loaded = loadGame();
-    if (loaded) {
-      startGame(loaded);
-      return;
-    }
-  }
-  const unmount = mountCharacterCreate(app, (classId) => {
+  const unmount = mountStartFlow(app, (player) => {
     unmount();
-    clearSave();
-    newCharacter(classId);
+    startGame(player);
   });
 }
 

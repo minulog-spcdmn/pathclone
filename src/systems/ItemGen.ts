@@ -144,6 +144,8 @@ export type CraftAction = 'transmutation' | 'augmentation' | 'alteration' | 'reg
 /** Returns whether `action` currency can legally be used on this item, mirroring PoE crafting currency rules. */
 export function canApplyCraft(item: ItemInstance, action: CraftAction): boolean {
   if (item.rarity === 'unique') return false;
+  const base = getBase(item.baseId);
+  if (base.slot === 'gem' || base.slot === 'flask') return false;
   switch (action) {
     case 'transmutation':
     case 'alchemy':

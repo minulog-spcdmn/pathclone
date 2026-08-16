@@ -136,13 +136,12 @@ export type EquipmentSlotKey =
   | 'ring1'
   | 'ring2'
   | 'flask1'
-  | 'flask2'
-  | 'flask3'
-  | 'flask4';
+  | 'flask2';
 
+/** flask1 is always the Life Flask, flask2 is always the Mana Flask — matching PoE2. */
 export const EQUIPMENT_SLOT_KEYS: EquipmentSlotKey[] = [
   'weapon', 'offhand', 'helmet', 'body', 'gloves', 'boots', 'belt', 'amulet', 'ring1', 'ring2',
-  'flask1', 'flask2', 'flask3', 'flask4',
+  'flask1', 'flask2',
 ];
 
 export type Equipment = Record<EquipmentSlotKey, ItemInstance | null>;

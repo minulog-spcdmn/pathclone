@@ -10,7 +10,8 @@ export type ItemSlot =
   | 'belt'
   | 'amulet'
   | 'ring'
-  | 'flask';
+  | 'flask'
+  | 'gem';
 
 export type DefenseArchetype = 'armor' | 'evasion' | 'es' | 'armor_evasion' | 'armor_es' | 'evasion_es';
 
@@ -38,11 +39,12 @@ export interface ItemBaseDef {
   evasionBase?: number;
   esBase?: number;
   // flask-only
-  flaskKind?: 'life' | 'mana' | 'utility';
+  flaskKind?: 'life' | 'mana';
   flaskLife?: number;
   flaskMana?: number;
   flaskDuration?: number;
-  flaskUtilityStats?: Record<string, number>;
+  // gem-only
+  gemKind?: 'skill' | 'support';
 }
 
 export const ITEM_BASES: Record<string, ItemBaseDef> = {
@@ -101,11 +103,17 @@ export const ITEM_BASES: Record<string, ItemBaseDef> = {
   amulet_t1: { id: 'amulet_t1', name: 'Bronze Amulet', slot: 'amulet', gridW: 1, gridH: 1, reqLevel: 1, reqAttrs: {}, icon: 'amulet', color: '#c0a050' },
   ring_t1: { id: 'ring_t1', name: 'Iron Ring', slot: 'ring', gridW: 1, gridH: 1, reqLevel: 1, reqAttrs: {}, icon: 'ring', color: '#a0a0a0' },
 
-  // ---- Flasks ----
+  // ---- Flasks: exactly two kinds exist, one per fixed flask slot (Life on 1, Mana on 2) ----
   flask_life_t1: { id: 'flask_life_t1', name: 'Small Life Flask', slot: 'flask', gridW: 1, gridH: 2, reqLevel: 1, reqAttrs: {}, icon: 'flask', color: '#c04040', flaskKind: 'life', flaskLife: 80, flaskDuration: 3 },
+  flask_life_t2: { id: 'flask_life_t2', name: 'Medium Life Flask', slot: 'flask', gridW: 1, gridH: 2, reqLevel: 12, reqAttrs: {}, icon: 'flask', color: '#d05050', flaskKind: 'life', flaskLife: 180, flaskDuration: 4 },
+  flask_life_t3: { id: 'flask_life_t3', name: 'Large Life Flask', slot: 'flask', gridW: 1, gridH: 2, reqLevel: 28, reqAttrs: {}, icon: 'flask', color: '#e06060', flaskKind: 'life', flaskLife: 380, flaskDuration: 5 },
   flask_mana_t1: { id: 'flask_mana_t1', name: 'Small Mana Flask', slot: 'flask', gridW: 1, gridH: 2, reqLevel: 1, reqAttrs: {}, icon: 'flask', color: '#4040c0', flaskKind: 'mana', flaskMana: 60, flaskDuration: 3 },
-  flask_utility_speed_t1: { id: 'flask_utility_speed_t1', name: 'Flask of Swiftness', slot: 'flask', gridW: 1, gridH: 2, reqLevel: 1, reqAttrs: {}, icon: 'flask', color: '#40c080', flaskKind: 'utility', flaskDuration: 5, flaskUtilityStats: { movementSpeedInc: 30 } },
-  flask_utility_res_t1: { id: 'flask_utility_res_t1', name: 'Flask of Warding', slot: 'flask', gridW: 1, gridH: 2, reqLevel: 1, reqAttrs: {}, icon: 'flask', color: '#c0a040', flaskKind: 'utility', flaskDuration: 5, flaskUtilityStats: { fireRes: 25, coldRes: 25, lightningRes: 25 } },
+  flask_mana_t2: { id: 'flask_mana_t2', name: 'Medium Mana Flask', slot: 'flask', gridW: 1, gridH: 2, reqLevel: 12, reqAttrs: {}, icon: 'flask', color: '#5050d0', flaskKind: 'mana', flaskMana: 130, flaskDuration: 4 },
+  flask_mana_t3: { id: 'flask_mana_t3', name: 'Large Mana Flask', slot: 'flask', gridW: 1, gridH: 2, reqLevel: 28, reqAttrs: {}, icon: 'flask', color: '#6060e0', flaskKind: 'mana', flaskMana: 260, flaskDuration: 5 },
+
+  // ---- Gems: found uncut, then cut into a chosen skill/support when socketed ----
+  uncut_skill_gem: { id: 'uncut_skill_gem', name: 'Uncut Skill Gem', slot: 'gem', gridW: 1, gridH: 1, reqLevel: 1, reqAttrs: {}, icon: 'gem', color: '#7ae0a8', gemKind: 'skill' },
+  uncut_support_gem: { id: 'uncut_support_gem', name: 'Uncut Support Gem', slot: 'gem', gridW: 1, gridH: 1, reqLevel: 1, reqAttrs: {}, icon: 'gem', color: '#e07ab0', gemKind: 'support' },
 };
 
 export const ITEM_BASE_LIST: ItemBaseDef[] = Object.values(ITEM_BASES);
