@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schema/forms.schema.json",
+  "title": "Form table",
+  "description": "DESIGN.md §6.1. Forms are geometry and attachment topology — 'rules about shape, not content'. A form carries no statistics: mass, swing speed, impulse profile and durability are all derived from whatever materials end up in its slots, at the point of use.",
+  "type": "object",
+  "required": ["forms"],
+  "additionalProperties": false,
+  "properties": {
+    "$comment": { "type": "string" },
+    "forms": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/form" }
+    }
+  },
+  "$defs": {
+    "form": {
+      "type": "object",
+      "required": ["id", "parts", "links", "strike_part", "edge_area", "leverage", "max_speed", "reach"],
+      "additionalProperties": false,
+      "properties": {
+        "$comment": { "type": "string" },
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "parts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "volume"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+              "volume": { "type": "number", "exclusiveMinimum": 0 }
+            }
+          }
+        },
+        "links": {
+          "description": "Assembly graph edges, by part id. Heat, charge and reaction products travel along these.",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": { "type": "string" }
+          }
+        },
+        "strike_part": {
+          "description": "Which part meets the target, and therefore which part takes the equal and opposite half of every blow.",
+          "type": "string"
+        },
+        "edge_area": {
+          "description": "Contact area of the striking geometry. This one number is the whole difference between a blade and a maul (§4.3).",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "leverage": {
+          "description": "Multiplies the wielder's strength into swing velocity.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "max_speed": {
+          "description": "Velocity ceiling imposed by the geometry. Without it, delivered energy would fall monotonically with mass and no one would ever build a heavy weapon; with it, the best material for a given wielder is a discovery.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "reach": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    }
+  }
+}

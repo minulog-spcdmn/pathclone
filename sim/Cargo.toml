@@ -1,0 +1,30 @@
+[package]
+name = "sim"
+version = "0.1.0"
+edition = "2021"
+description = "Deterministic simulation substrate. Zero dependencies on rendering, networking or platform APIs (DESIGN.md §12.1)."
+
+# Deliberately empty. §12.1 makes host-agnosticism a hard requirement, and §12.4
+# rule 2 forbids platform transcendentals — both are easiest to guarantee by
+# having nothing to link against in the first place.
+[dependencies]
+
+# Native builds are a plain rlib so `cargo test` links once and cleanly. The
+# browser module is produced by `cargo rustc --crate-type cdylib` in
+# tools/build-sim.mjs; declaring cdylib here as well makes cargo emit both on
+# every native build and collide their filenames.
+[lib]
+crate-type = ["rlib"]
+
+[profile.release]
+panic = "abort"
+lto = true
+opt-level = "s"
+# Overflow behaviour must not differ between profiles or the determinism test in
+# §12.4 rule 6 can pass in debug and fail in release. Every arithmetic operation
+# in this crate is explicitly saturating or checked; this makes that a hard error
+# rather than a convention.
+overflow-checks = true
+
+[profile.dev]
+overflow-checks = true

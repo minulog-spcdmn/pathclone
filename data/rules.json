@@ -1,0 +1,33 @@
+{
+  "$comment": "The hand-authored rules of DESIGN.md §0 — 'as few as possible, and hand-authored with extreme care'. §13's balance philosophy points here first: when something is overpowered the fix is a coefficient in this file or a property in materials.json, never a special case in the resolver. Nothing in this file names a material, an item or a creature.",
+
+  "ambient_temp": 20.0,
+  "reference_temp": 20.0,
+  "aether_density": 0.30,
+  "dt": 0.05,
+
+  "fracture_k": 12.0,
+  "blunt_k": 30.0,
+  "deform_k": 0.35,
+  "friction_heat_k": 0.5,
+  "strike_return_k": 1.0,
+
+  "conduction_k": 2.0,
+  "ambient_conduction_k": 0.02,
+  "radiant_k": 0.35,
+  "radiant_radius": 4.0,
+
+  "charge_diffusion_k": 3.0,
+  "charge_leak_k": 0.10,
+  "arc_radius": 6.0,
+  "arc_loss": 0.20,
+  "arc_heat_per_charge": 2.0,
+  "charge_energy_coeff": 2.0,
+  "flux_destabilise_k": 0.10,
+
+  "soften_k": 0.90,
+  "reaction_k": 1.0,
+
+  "fragment_max": 4,
+  "cascade_generations": 3
+}

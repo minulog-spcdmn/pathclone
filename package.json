@@ -6,7 +6,16 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "sim:build": "node tools/build-sim.mjs",
+    "sim:test": "cargo test --release --manifest-path sim/Cargo.toml",
+    "data:pack": "node tools/pack.ts",
+    "data:validate": "node tools/validate.ts",
+    "gate": "node tools/shipgate.ts",
+    "fuzz": "node tools/fuzz.ts",
+    "determinism": "node tools/determinism.ts",
+    "matrix": "node tools/matrix.ts",
+    "check": "npm run data:validate && npm run sim:build && npm run data:pack && npm run gate && npm run fuzz && npm run sim:test && npm run determinism"
   },
   "devDependencies": {
     "@types/three": "^0.185.4",

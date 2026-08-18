@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Rust build artifacts and packed data blobs (regenerate with npm run sim:build / data:pack)
+sim/target
+build

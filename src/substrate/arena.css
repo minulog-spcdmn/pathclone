@@ -1,0 +1,383 @@
+/*
+ * The bare test arena of DESIGN.md §4.4 and §15 M1.
+ *
+ * §10.3 sets the tone: "Do not display derived DPS, 'item level', or a power
+ * score. Display physical properties. The reasoning is the gameplay." and
+ * "This game's audience wants the numbers." So this is an instrument panel,
+ * not a HUD — dense, monospaced, and unwilling to round anything away.
+ */
+
+:root {
+  --bg: #0b0d10;
+  --panel: #12161b;
+  --panel-2: #171c23;
+  --line: #232a33;
+  --ink: #d7dee7;
+  --ink-dim: #7c8996;
+  --ink-faint: #4d5763;
+  --accent: #6fb3ff;
+  --hot: #ff8a4c;
+  --cold: #66d9ff;
+  --good: #7bd88f;
+  --bad: #ff6b6b;
+  --warn: #f0c674;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+}
+
+body.substrate {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 13px/1.5 var(--mono);
+  -webkit-font-smoothing: antialiased;
+}
+
+#arena {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 1px;
+  height: 100vh;
+  background: var(--line);
+}
+
+header.bar {
+  grid-column: 1 / -1;
+  background: var(--panel);
+  padding: 10px 16px;
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+header.bar h1 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: 0.04em;
+}
+
+header.bar .spec {
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.stats {
+  margin-left: auto;
+  display: flex;
+  gap: 18px;
+  font-size: 11px;
+  color: var(--ink-dim);
+  flex-wrap: wrap;
+}
+
+.stats b {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+main.stage {
+  background: var(--bg);
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+}
+
+canvas#view {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+.stage-overlay {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  right: 12px;
+  pointer-events: none;
+  font-size: 11px;
+  color: var(--ink-faint);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+aside.side {
+  background: var(--panel);
+  overflow-y: auto;
+  min-width: 0;
+}
+
+section.panel {
+  border-bottom: 1px solid var(--line);
+}
+
+section.panel > h2 {
+  margin: 0;
+  padding: 9px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  background: var(--panel-2);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+section.panel > h2 span {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-faint);
+}
+
+.panel-body {
+  padding: 10px 14px 14px;
+}
+
+.claim {
+  color: var(--accent);
+  font-size: 12px;
+  margin: 0 0 8px;
+  line-height: 1.45;
+}
+
+.note {
+  color: var(--ink-dim);
+  font-size: 11.5px;
+  margin: 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.verdict {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.verdict.pass {
+  background: rgba(123, 216, 143, 0.16);
+  color: var(--good);
+}
+
+.verdict.fail {
+  background: rgba(255, 107, 107, 0.16);
+  color: var(--bad);
+}
+
+select,
+button,
+input[type="number"] {
+  font: inherit;
+  font-size: 12px;
+  background: var(--panel-2);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 5px 8px;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: #fff;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+select {
+  width: 100%;
+}
+
+.row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.row + .row {
+  margin-top: 8px;
+}
+
+.row label {
+  color: var(--ink-dim);
+  font-size: 11px;
+  min-width: 62px;
+}
+
+.row .grow {
+  flex: 1;
+  min-width: 0;
+}
+
+table.props {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+
+table.props td {
+  padding: 2px 0;
+  vertical-align: baseline;
+}
+
+table.props td:first-child {
+  color: var(--ink-dim);
+  white-space: nowrap;
+  padding-right: 10px;
+}
+
+table.props td:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.bar-cell {
+  display: block;
+  height: 3px;
+  background: var(--line);
+  border-radius: 2px;
+  margin-top: 2px;
+  overflow: hidden;
+}
+
+.bar-cell i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.readout {
+  font-size: 11px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.readout .ev {
+  display: grid;
+  grid-template-columns: 34px 68px 1fr;
+  gap: 8px;
+  padding: 2px 14px;
+  border-left: 2px solid transparent;
+}
+
+.readout .ev:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.readout .t {
+  color: var(--ink-faint);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.readout .k {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.readout .d {
+  color: var(--ink-dim);
+}
+
+.ev.impact {
+  border-left-color: #4a5666;
+}
+.ev.impact .k {
+  color: #93a3b5;
+}
+.ev.deformed {
+  border-left-color: var(--warn);
+}
+.ev.deformed .k {
+  color: var(--warn);
+}
+.ev.fractured {
+  border-left-color: var(--bad);
+}
+.ev.fractured .k {
+  color: var(--bad);
+}
+.ev.phase {
+  border-left-color: var(--hot);
+}
+.ev.phase .k {
+  color: var(--hot);
+}
+.ev.reacted {
+  border-left-color: #b98cff;
+}
+.ev.reacted .k {
+  color: #b98cff;
+}
+.ev.discharged {
+  border-left-color: var(--cold);
+}
+.ev.discharged .k {
+  color: var(--cold);
+}
+.ev.destroyed,
+.ev.spawned {
+  border-left-color: #3d4756;
+}
+.ev.destroyed .k,
+.ev.spawned .k {
+  color: var(--ink-faint);
+}
+
+.empty {
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  padding: 2px 0;
+}
+
+.legend {
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  line-height: 1.6;
+  margin-top: 8px;
+}
+
+.tag {
+  display: inline-block;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0 5px;
+  margin: 1px 3px 1px 0;
+  font-size: 10.5px;
+  color: var(--ink-dim);
+}
+
+.fatal {
+  padding: 40px;
+  max-width: 640px;
+  line-height: 1.6;
+}
+
+.fatal code {
+  display: block;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin: 12px 0;
+  color: var(--accent);
+  white-space: pre-wrap;
+}

@@ -1,0 +1,3139 @@
+{
+  "$comment": "DESIGN.md \u00a74.2 and \u00a74.4. This file is the deliverable, not the scaffolding around it. Values are game units, not SI: what matters is monotonicity and consistent ratios (\u00a74.2). `class` is taxonomy only and has no mechanical effect. `formation` is carried for \u00a75.1 layer 6 and is deliberately not packed into the simulation yet \u2014 worldgen is M2. `solidify` is a downward phase crossing; see sim/src/material.rs for why the \u00a74.2 schema needs it.",
+  "tags": [
+    "solvent",
+    "acid",
+    "base",
+    "oxidiser",
+    "reducer",
+    "fuel",
+    "water",
+    "salt",
+    "metal",
+    "organic",
+    "mineral",
+    "aetheric",
+    "abrasive",
+    "volatile"
+  ],
+  "classes": [
+    "mineral",
+    "metal",
+    "organic",
+    "fluid",
+    "gas",
+    "aetheric",
+    "residue"
+  ],
+  "materials": [
+    {
+      "id": "granite",
+      "class": "mineral",
+      "tags": [
+        "mineral",
+        "abrasive"
+      ],
+      "density": 2.7,
+      "hardness": 6.0,
+      "toughness": 0.3,
+      "elasticity": 0.1,
+      "friction": 0.65,
+      "heat_capacity": 0.8,
+      "thermal_conductivity": 0.35,
+      "conductivity": 0.02,
+      "aether_permeability": 0.25,
+      "aether_capacity": 2.0,
+      "discharge_threshold": 1.6,
+      "corrosion_resistance": 0.85,
+      "phase_points": {
+        "melt": 1200
+      },
+      "phase_products": {
+        "melt": "magma"
+      },
+      "phase_energy": {
+        "melt": 200
+      },
+      "reactions": [
+        {
+          "with": "*:acid",
+          "produces": "grit",
+          "rate": 0.05,
+          "releases": {
+            "thermal": 5
+          }
+        }
+      ],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -40,
+            900
+          ],
+          "aether_density": [
+            0.0,
+            1.0
+          ],
+          "depth": [
+            0,
+            4000
+          ]
+        },
+        "abundance": 0.3
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 25
+      }
+    },
+    {
+      "id": "chalkstone",
+      "class": "mineral",
+      "tags": [
+        "mineral",
+        "base"
+      ],
+      "density": 1.9,
+      "hardness": 1.6,
+      "toughness": 0.12,
+      "elasticity": 0.05,
+      "friction": 0.7,
+      "heat_capacity": 0.9,
+      "thermal_conductivity": 0.3,
+      "conductivity": 0.02,
+      "aether_permeability": 0.3,
+      "aether_capacity": 1.5,
+      "discharge_threshold": 1.2,
+      "corrosion_resistance": 0.15,
+      "phase_points": {
+        "melt": 900
+      },
+      "phase_products": {
+        "melt": "magma"
+      },
+      "phase_energy": {
+        "melt": 200
+      },
+      "reactions": [
+        {
+          "with": "*:acid",
+          "produces": "quicklime",
+          "rate": 0.9,
+          "releases": {
+            "thermal": 600
+          }
+        }
+      ],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -20,
+            60
+          ],
+          "aether_density": [
+            0.0,
+            0.6
+          ],
+          "depth": [
+            0,
+            300
+          ]
+        },
+        "abundance": 0.22
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 48
+      }
+    },
+    {
+      "id": "obsidian",
+      "class": "mineral",
+      "tags": [
+        "mineral",
+        "abrasive"
+      ],
+      "density": 2.4,
+      "hardness": 8.5,
+      "toughness": 0.04,
+      "elasticity": 0.06,
+      "friction": 0.35,
+      "heat_capacity": 0.7,
+      "thermal_conductivity": 0.3,
+      "conductivity": 0.01,
+      "aether_permeability": 0.45,
+      "aether_capacity": 3.0,
+      "discharge_threshold": 2.4,
+      "corrosion_resistance": 0.92,
+      "phase_points": {
+        "melt": 850
+      },
+      "phase_products": {
+        "melt": "magma"
+      },
+      "phase_energy": {
+        "melt": 200
+      },
+      "reactions": [
+        {
+          "with": "*:acid",
+          "produces": "grit",
+          "rate": 0.03,
+          "releases": {
+            "thermal": 4
+          }
+        }
+      ],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -20,
+            200
+          ],
+          "aether_density": [
+            0.1,
+            0.8
+          ],
+          "depth": [
+            0,
+            600
+          ]
+        },
+        "abundance": 0.05
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 265
+      }
+    },
+    {
+      "id": "hoarfrost_quartz",
+      "class": "mineral",
+      "tags": [
+        "mineral",
+        "aetheric"
+      ],
+      "$comment": "\u00a74.2's worked example, kept as authored except for the melt point. The document's -20 makes the material a liquid at any habitable temperature, which is not what the surrounding prose describes; 45 keeps it solid in hand and liquid near a forge, which is the behaviour \u00a74.3 promises.",
+      "density": 2.1,
+      "hardness": 7.2,
+      "toughness": 0.18,
+      "elasticity": 0.3,
+      "friction": 0.42,
+      "heat_capacity": 0.55,
+      "thermal_conductivity": 0.81,
+      "conductivity": 0.05,
+      "aether_permeability": 0.9,
+      "aether_capacity": 3.4,
+      "discharge_threshold": 2.8,
+      "corrosion_resistance": 0.66,
+      "phase_points": {
+        "melt": 45,
+        "boil": 140
+      },
+      "phase_products": {
+        "melt": "quartz_melt",
+        "boil": "aether_vapor"
+      },
+      "phase_energy": {
+        "melt": 90,
+        "boil": 220
+      },
+      "reactions": [
+        {
+          "with": "*:solvent",
+          "produces": "quartz_slurry",
+          "rate": 0.4,
+          "releases": {
+            "thermal": -12
+          }
+        },
+        {
+          "with": "*:reducer",
+          "produces": "raw_quartz",
+          "rate": 0.1,
+          "releases": {
+            "thermal": 0
+          }
+        }
+      ],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -40,
+            -5
+          ],
+          "aether_density": [
+            0.6,
+            1.0
+          ],
+          "depth": [
+            20,
+            200
+          ]
+        },
+        "abundance": 0.03
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 195
+      }
+    },
+    {
+      "id": "raw_quartz",
+      "class": "mineral",
+      "tags": [
+        "mineral",
+        "abrasive"
+      ],
+      "$comment": "Refined quartz: the aether is what the reduction strips out, so it is a better abrasive and a worse conduit.",
+      "density": 2.2,
+      "hardness": 7.4,
+      "toughness": 0.16,
+      "elasticity": 0.28,
+      "friction": 0.5,
+      "heat_capacity": 0.6,
+      "thermal_conductivity": 0.4,
+      "conductivity": 0.02,
+      "aether_permeability": 0.2,
+      "aether_capacity": 1.2,
+      "discharge_threshold": 1.0,
+      "corrosion_resistance": 0.88,
+      "phase_points": {
+        "melt": 1300
+      },
+      "phase_products": {
+        "melt": "magma"
+      },
+      "phase_energy": {
+        "melt": 200
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -40,
+            400
+          ],
+          "aether_density": [
+            0.0,
+            0.4
+          ],
+          "depth": [
+            0,
+            900
+          ]
+        },
+        "abundance": 0.14
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 35
+      }
+    },
+    {
+      "id": "basalt",
+      "class": "mineral",
+      "tags": [
+        "mineral"
+      ],
+      "density": 3.0,
+      "hardness": 6.5,
+      "toughness": 0.35,
+      "elasticity": 0.12,
+      "friction": 0.72,
+      "heat_capacity": 0.9,
+      "thermal_conductivity": 0.32,
+      "conductivity": 0.03,
+      "aether_permeability": 0.22,
+      "aether_capacity": 1.8,
+      "discharge_threshold": 1.4,
+      "corrosion_resistance": 0.88,
+      "phase_points": {
+        "melt": 1100
+      },
+      "phase_products": {
+        "melt": "magma"
+      },
+      "phase_energy": {
+        "melt": 245
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -40,
+            900
+          ],
+          "aether_density": [
+            0.0,
+            1.0
+          ],
+          "depth": [
+            0,
+            5000
+          ]
+        },
+        "abundance": 0.28
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 210
+      }
+    },
+    {
+      "id": "sulphur_nodule",
+      "class": "mineral",
+      "tags": [
+        "mineral",
+        "fuel",
+        "volatile"
+      ],
+      "density": 2.0,
+      "hardness": 1.2,
+      "toughness": 0.08,
+      "elasticity": 0.05,
+      "friction": 0.55,
+      "heat_capacity": 0.7,
+      "thermal_conductivity": 0.12,
+      "conductivity": 0.02,
+      "aether_permeability": 0.3,
+      "aether_capacity": 1.0,
+      "discharge_threshold": 0.8,
+      "corrosion_resistance": 0.3,
+      "phase_points": {
+        "ignite": 240
+      },
+      "phase_products": {
+        "ignite": "slag"
+      },
+      "phase_energy": {
+        "ignite": 2000
+      },
+      "reactions": [
+        {
+          "with": "*:oxidiser",
+          "produces": "blastfire",
+          "rate": 0.8,
+          "releases": {
+            "thermal": 700
+          }
+        }
+      ],
+      "formation": {
+        "requires": {
+          "temperature": [
+            40,
+            400
+          ],
+          "aether_density": [
+            0.0,
+            0.7
+          ],
+          "depth": [
+            0,
+            800
+          ]
+        },
+        "abundance": 0.04
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 55
+      }
+    },
+    {
+      "id": "saltpetre",
+      "class": "mineral",
+      "tags": [
+        "mineral",
+        "oxidiser",
+        "salt"
+      ],
+      "density": 2.1,
+      "hardness": 1.0,
+      "toughness": 0.1,
+      "elasticity": 0.04,
+      "friction": 0.6,
+      "heat_capacity": 0.8,
+      "thermal_conductivity": 0.2,
+      "conductivity": 0.03,
+      "aether_permeability": 0.35,
+      "aether_capacity": 1.2,
+      "discharge_threshold": 0.9,
+      "corrosion_resistance": 0.1,
+      "phase_points": {
+        "melt": 330
+      },
+      "phase_products": {
+        "melt": "slag"
+      },
+      "phase_energy": {
+        "melt": 150
+      },
+      "reactions": [
+        {
+          "with": "*:fuel",
+          "produces": "blastfire",
+          "rate": 0.9,
+          "releases": {
+            "thermal": 900
+          }
+        }
+      ],
+      "formation": {
+        "requires": {
+          "temperature": [
+            0,
+            200
+          ],
+          "aether_density": [
+            0.0,
+            0.5
+          ],
+          "depth": [
+            0,
+            120
+          ]
+        },
+        "abundance": 0.03
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 62
+      }
+    },
+    {
+      "id": "rime_salt",
+      "class": "mineral",
+      "tags": [
+        "mineral",
+        "salt"
+      ],
+      "$comment": "Dissolving it is strongly endothermic. A flask of water plus a handful of this is a cold weapon and nobody wrote a cold weapon.",
+      "density": 2.2,
+      "hardness": 2.4,
+      "toughness": 0.06,
+      "elasticity": 0.05,
+      "friction": 0.55,
+      "heat_capacity": 0.85,
+      "thermal_conductivity": 0.42,
+      "conductivity": 0.06,
+      "aether_permeability": 0.55,
+      "aether_capacity": 1.6,
+      "discharge_threshold": 1.2,
+      "corrosion_resistance": 0.05,
+      "phase_points": {
+        "melt": 800
+      },
+      "phase_products": {
+        "melt": "slag"
+      },
+      "phase_energy": {
+        "melt": 200
+      },
+      "reactions": [
+        {
+          "with": "*:solvent",
+          "produces": "brine",
+          "rate": 0.9,
+          "releases": {
+            "thermal": -260
+          }
+        }
+      ],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -60,
+            10
+          ],
+          "aether_density": [
+            0.2,
+            0.9
+          ],
+          "depth": [
+            0,
+            250
+          ]
+        },
+        "abundance": 0.06
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 185
+      }
+    },
+    {
+      "id": "voidglass",
+      "class": "aetheric",
+      "tags": [
+        "mineral",
+        "aetheric"
+      ],
+      "$comment": "Almost nothing gets through it. Shielding, and a terrible wand.",
+      "density": 2.6,
+      "hardness": 7.8,
+      "toughness": 0.05,
+      "elasticity": 0.1,
+      "friction": 0.4,
+      "heat_capacity": 0.6,
+      "thermal_conductivity": 0.3,
+      "conductivity": 0.005,
+      "aether_permeability": 0.02,
+      "aether_capacity": 0.4,
+      "discharge_threshold": 0.3,
+      "corrosion_resistance": 0.95,
+      "phase_points": {
+        "melt": 1400
+      },
+      "phase_products": {
+        "melt": "magma"
+      },
+      "phase_energy": {
+        "melt": 200
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -40,
+            300
+          ],
+          "aether_density": [
+            0.85,
+            1.0
+          ],
+          "depth": [
+            400,
+            3000
+          ]
+        },
+        "abundance": 0.01
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 280
+      }
+    },
+    {
+      "id": "stormcrystal",
+      "class": "aetheric",
+      "tags": [
+        "mineral",
+        "aetheric"
+      ],
+      "$comment": "The battery: enormous capacity with a high threshold, so it holds charge instead of shedding it.",
+      "density": 2.8,
+      "hardness": 5.5,
+      "toughness": 0.22,
+      "elasticity": 0.25,
+      "friction": 0.5,
+      "heat_capacity": 0.75,
+      "thermal_conductivity": 1.1,
+      "conductivity": 3.6,
+      "aether_permeability": 0.35,
+      "aether_capacity": 30.0,
+      "discharge_threshold": 24.0,
+      "corrosion_resistance": 0.7,
+      "phase_points": {
+        "melt": 1600
+      },
+      "phase_products": {
+        "melt": "magma"
+      },
+      "phase_energy": {
+        "melt": 200
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -60,
+            200
+          ],
+          "aether_density": [
+            0.7,
+            1.0
+          ],
+          "depth": [
+            100,
+            2000
+          ]
+        },
+        "abundance": 0.015
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 250
+      }
+    },
+    {
+      "id": "copper",
+      "class": "metal",
+      "tags": [
+        "metal",
+        "reducer"
+      ],
+      "density": 8.9,
+      "hardness": 1.8,
+      "toughness": 0.85,
+      "elasticity": 0.3,
+      "friction": 0.45,
+      "heat_capacity": 0.39,
+      "thermal_conductivity": 3.9,
+      "conductivity": 6.0,
+      "aether_permeability": 0.3,
+      "aether_capacity": 4.0,
+      "discharge_threshold": 3.0,
+      "corrosion_resistance": 0.55,
+      "phase_points": {
+        "melt": 1085
+      },
+      "phase_products": {
+        "melt": "copper_melt"
+      },
+      "phase_energy": {
+        "melt": 220
+      },
+      "reactions": [
+        {
+          "with": "*:acid",
+          "produces": "verdigris",
+          "rate": 0.45,
+          "releases": {
+            "thermal": 30
+          }
+        }
+      ],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -40,
+            600
+          ],
+          "aether_density": [
+            0.0,
+            0.8
+          ],
+          "depth": [
+            10,
+            900
+          ]
+        },
+        "abundance": 0.07
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 20
+      }
+    },
+    {
+      "id": "cold_iron",
+      "class": "metal",
+      "tags": [
+        "metal",
+        "reducer"
+      ],
+      "density": 7.8,
+      "hardness": 4.4,
+      "toughness": 0.62,
+      "elasticity": 0.28,
+      "friction": 0.5,
+      "heat_capacity": 0.45,
+      "thermal_conductivity": 2.4,
+      "conductivity": 3.2,
+      "aether_permeability": 0.18,
+      "aether_capacity": 3.0,
+      "discharge_threshold": 2.2,
+      "corrosion_resistance": 0.35,
+      "phase_points": {
+        "melt": 1500
+      },
+      "phase_products": {
+        "melt": "iron_melt"
+      },
+      "phase_energy": {
+        "melt": 250
+      },
+      "reactions": [
+        {
+          "with": "*:acid",
+          "produces": "rust",
+          "rate": 0.6,
+          "releases": {
+            "thermal": 45
+          }
+        }
+      ],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -40,
+            700
+          ],
+          "aether_density": [
+            0.0,
+            0.6
+          ],
+          "depth": [
+            20,
+            1200
+          ]
+        },
+        "abundance": 0.09
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 205
+      }
+    },
+    {
+      "id": "bog_iron",
+      "class": "metal",
+      "tags": [
+        "metal",
+        "reducer"
+      ],
+      "density": 7.2,
+      "hardness": 3.2,
+      "toughness": 0.45,
+      "elasticity": 0.24,
+      "friction": 0.55,
+      "heat_capacity": 0.46,
+      "thermal_conductivity": 2.0,
+      "conductivity": 2.6,
+      "aether_permeability": 0.2,
+      "aether_capacity": 2.6,
+      "discharge_threshold": 1.9,
+      "corrosion_resistance": 0.2,
+      "phase_points": {
+        "melt": 1420
+      },
+      "phase_products": {
+        "melt": "iron_melt"
+      },
+      "phase_energy": {
+        "melt": 250
+      },
+      "reactions": [
+        {
+          "with": "*:acid",
+          "produces": "rust",
+          "rate": 0.8,
+          "releases": {
+            "thermal": 45
+          }
+        }
+      ],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -10,
+            40
+          ],
+          "aether_density": [
+            0.0,
+            0.5
+          ],
+          "depth": [
+            0,
+            30
+          ]
+        },
+        "abundance": 0.18
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 30
+      }
+    },
+    {
+      "id": "tin",
+      "class": "metal",
+      "tags": [
+        "metal",
+        "reducer"
+      ],
+      "density": 7.3,
+      "hardness": 0.9,
+      "toughness": 0.72,
+      "elasticity": 0.22,
+      "friction": 0.4,
+      "heat_capacity": 0.22,
+      "thermal_conductivity": 2.0,
+      "conductivity": 3.4,
+      "aether_permeability": 0.28,
+      "aether_capacity": 2.2,
+      "discharge_threshold": 1.6,
+      "corrosion_resistance": 0.6,
+      "phase_points": {
+        "melt": 232
+      },
+      "phase_products": {
+        "melt": "tin_melt"
+      },
+      "phase_energy": {
+        "melt": 102
+      },
+      "reactions": [
+        {
+          "with": "*:acid",
+          "produces": "slag",
+          "rate": 0.5,
+          "releases": {
+            "thermal": 25
+          }
+        }
+      ],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -40,
+            500
+          ],
+          "aether_density": [
+            0.0,
+            0.6
+          ],
+          "depth": [
+            10,
+            700
+          ]
+        },
+        "abundance": 0.04
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 200
+      }
+    },
+    {
+      "id": "bronze",
+      "class": "metal",
+      "tags": [
+        "metal",
+        "reducer"
+      ],
+      "$comment": "The alloy of copper and tin \u2014 harder than either parent and tougher than iron. \u00a75.4 wants alloy curves with local optima; this is the peak of one.",
+      "density": 8.6,
+      "hardness": 3.6,
+      "toughness": 0.68,
+      "elasticity": 0.3,
+      "friction": 0.44,
+      "heat_capacity": 0.38,
+      "thermal_conductivity": 3.0,
+      "conductivity": 4.6,
+      "aether_permeability": 0.26,
+      "aether_capacity": 3.2,
+      "discharge_threshold": 2.4,
+      "corrosion_resistance": 0.72,
+      "phase_points": {
+        "melt": 950
+      },
+      "phase_products": {
+        "melt": "copper_melt"
+      },
+      "phase_energy": {
+        "melt": 220
+      },
+      "reactions": [
+        {
+          "with": "*:acid",
+          "produces": "verdigris",
+          "rate": 0.35,
+          "releases": {
+            "thermal": 28
+          }
+        }
+      ],
+      "formation": {
+        "requires": {
+          "temperature": [
+            0,
+            0
+          ],
+          "aether_density": [
+            0,
+            0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 40
+      }
+    },
+    {
+      "id": "pale_silver",
+      "class": "metal",
+      "tags": [
+        "metal",
+        "aetheric"
+      ],
+      "density": 10.5,
+      "hardness": 1.4,
+      "toughness": 0.8,
+      "elasticity": 0.32,
+      "friction": 0.42,
+      "heat_capacity": 0.24,
+      "thermal_conductivity": 4.3,
+      "conductivity": 8.5,
+      "aether_permeability": 0.88,
+      "aether_capacity": 6.0,
+      "discharge_threshold": 4.5,
+      "corrosion_resistance": 0.8,
+      "phase_points": {
+        "melt": 960
+      },
+      "phase_products": {
+        "melt": "copper_melt"
+      },
+      "phase_energy": {
+        "melt": 220
+      },
+      "reactions": [
+        {
+          "with": "*:acid",
+          "produces": "slag",
+          "rate": 0.2,
+          "releases": {
+            "thermal": 18
+          }
+        }
+      ],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -40,
+            400
+          ],
+          "aether_density": [
+            0.5,
+            1.0
+          ],
+          "depth": [
+            50,
+            1500
+          ]
+        },
+        "abundance": 0.02
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 190
+      }
+    },
+    {
+      "id": "meteoric_steel",
+      "class": "metal",
+      "tags": [
+        "metal",
+        "reducer",
+        "aetheric"
+      ],
+      "$comment": "The anti-correlated outlier \u00a74.2 asks for: hard AND tough, conductive AND permeable. It was never authored as a legendary item, it is just a rock that landed wrong. Abundance is near zero for a reason.",
+      "density": 7.9,
+      "hardness": 8.2,
+      "toughness": 0.88,
+      "elasticity": 0.34,
+      "friction": 0.52,
+      "heat_capacity": 0.46,
+      "thermal_conductivity": 2.8,
+      "conductivity": 3.0,
+      "aether_permeability": 0.55,
+      "aether_capacity": 5.5,
+      "discharge_threshold": 4.2,
+      "corrosion_resistance": 0.9,
+      "phase_points": {
+        "melt": 1620
+      },
+      "phase_products": {
+        "melt": "iron_melt"
+      },
+      "phase_energy": {
+        "melt": 250
+      },
+      "reactions": [
+        {
+          "with": "*:acid",
+          "produces": "rust",
+          "rate": 0.05,
+          "releases": {
+            "thermal": 40
+          }
+        }
+      ],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -60,
+            900
+          ],
+          "aether_density": [
+            0.75,
+            1.0
+          ],
+          "depth": [
+            0,
+            60
+          ]
+        },
+        "abundance": 0.002
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 230
+      }
+    },
+    {
+      "id": "lead_grey",
+      "class": "metal",
+      "tags": [
+        "metal"
+      ],
+      "density": 11.3,
+      "hardness": 0.5,
+      "toughness": 0.55,
+      "elasticity": 0.12,
+      "friction": 0.42,
+      "heat_capacity": 0.13,
+      "thermal_conductivity": 1.6,
+      "conductivity": 2.0,
+      "aether_permeability": 0.05,
+      "aether_capacity": 1.4,
+      "discharge_threshold": 1.0,
+      "corrosion_resistance": 0.75,
+      "phase_points": {
+        "melt": 327
+      },
+      "phase_products": {
+        "melt": "slag"
+      },
+      "phase_energy": {
+        "melt": 120
+      },
+      "reactions": [
+        {
+          "with": "*:acid",
+          "produces": "slag",
+          "rate": 0.3,
+          "releases": {
+            "thermal": 20
+          }
+        }
+      ],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -40,
+            300
+          ],
+          "aether_density": [
+            0.0,
+            0.4
+          ],
+          "depth": [
+            30,
+            1100
+          ]
+        },
+        "abundance": 0.05
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 215
+      }
+    },
+    {
+      "id": "quicksilver",
+      "class": "fluid",
+      "tags": [
+        "metal",
+        "solvent"
+      ],
+      "density": 13.5,
+      "hardness": 0.0,
+      "toughness": 0.0,
+      "elasticity": 0.0,
+      "friction": 0.05,
+      "heat_capacity": 0.14,
+      "thermal_conductivity": 1.2,
+      "conductivity": 4.8,
+      "aether_permeability": 0.35,
+      "aether_capacity": 2.0,
+      "discharge_threshold": 1.4,
+      "corrosion_resistance": 0.85,
+      "phase_points": {
+        "boil": 357,
+        "solidify": -39
+      },
+      "phase_products": {
+        "boil": "aether_vapor",
+        "solidify": "quicksilver_solid"
+      },
+      "phase_energy": {
+        "boil": 180,
+        "solidify": 60
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -30,
+            300
+          ],
+          "aether_density": [
+            0.3,
+            1.0
+          ],
+          "depth": [
+            80,
+            1600
+          ]
+        },
+        "abundance": 0.008
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 200
+      }
+    },
+    {
+      "id": "quicksilver_solid",
+      "class": "metal",
+      "tags": [
+        "metal"
+      ],
+      "density": 14.2,
+      "hardness": 1.1,
+      "toughness": 0.3,
+      "elasticity": 0.1,
+      "friction": 0.35,
+      "heat_capacity": 0.14,
+      "thermal_conductivity": 1.3,
+      "conductivity": 4.2,
+      "aether_permeability": 0.32,
+      "aether_capacity": 2.1,
+      "discharge_threshold": 1.5,
+      "corrosion_resistance": 0.85,
+      "phase_points": {
+        "melt": -35
+      },
+      "phase_products": {
+        "melt": "quicksilver"
+      },
+      "phase_energy": {
+        "melt": 60
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -200,
+            -39
+          ],
+          "aether_density": [
+            0.3,
+            1.0
+          ],
+          "depth": [
+            0,
+            1600
+          ]
+        },
+        "abundance": 0.001
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 198
+      }
+    },
+    {
+      "id": "boarhide",
+      "class": "organic",
+      "tags": [
+        "organic",
+        "fuel"
+      ],
+      "density": 0.95,
+      "hardness": 0.35,
+      "toughness": 0.72,
+      "elasticity": 0.55,
+      "friction": 0.62,
+      "heat_capacity": 1.6,
+      "thermal_conductivity": 0.04,
+      "conductivity": 0.05,
+      "aether_permeability": 0.35,
+      "aether_capacity": 1.0,
+      "discharge_threshold": 0.8,
+      "corrosion_resistance": 0.45,
+      "phase_points": {
+        "ignite": 320
+      },
+      "phase_products": {
+        "ignite": "ashwood_char"
+      },
+      "phase_energy": {
+        "ignite": 285
+      },
+      "reactions": [
+        {
+          "with": "*:base",
+          "produces": "slurry",
+          "rate": 0.6,
+          "releases": {
+            "thermal": 30
+          }
+        }
+      ],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -30,
+            45
+          ],
+          "aether_density": [
+            0.0,
+            0.9
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 28
+      }
+    },
+    {
+      "id": "sinew",
+      "class": "organic",
+      "tags": [
+        "organic",
+        "fuel"
+      ],
+      "density": 1.05,
+      "hardness": 0.28,
+      "toughness": 0.9,
+      "elasticity": 0.75,
+      "friction": 0.7,
+      "heat_capacity": 1.7,
+      "thermal_conductivity": 0.05,
+      "conductivity": 0.08,
+      "aether_permeability": 0.4,
+      "aether_capacity": 1.1,
+      "discharge_threshold": 0.9,
+      "corrosion_resistance": 0.4,
+      "phase_points": {
+        "ignite": 300
+      },
+      "phase_products": {
+        "ignite": "ashwood_char"
+      },
+      "phase_energy": {
+        "ignite": 270
+      },
+      "reactions": [
+        {
+          "with": "*:base",
+          "produces": "slurry",
+          "rate": 0.65,
+          "releases": {
+            "thermal": 30
+          }
+        }
+      ],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -30,
+            45
+          ],
+          "aether_density": [
+            0.0,
+            0.9
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 44
+      }
+    },
+    {
+      "id": "spider_silk",
+      "class": "organic",
+      "tags": [
+        "organic",
+        "fuel"
+      ],
+      "$comment": "Toughness 0.95 against hardness 0.12 \u2014 the opposite corner of the property space from obsidian, and the reason a maul is useless against it.",
+      "density": 0.6,
+      "hardness": 0.12,
+      "toughness": 0.95,
+      "elasticity": 0.8,
+      "friction": 0.45,
+      "heat_capacity": 1.4,
+      "thermal_conductivity": 0.03,
+      "conductivity": 0.06,
+      "aether_permeability": 0.55,
+      "aether_capacity": 1.3,
+      "discharge_threshold": 1.0,
+      "corrosion_resistance": 0.55,
+      "phase_points": {
+        "ignite": 260
+      },
+      "phase_products": {
+        "ignite": "ashwood_char"
+      },
+      "phase_energy": {
+        "ignite": 250
+      },
+      "reactions": [
+        {
+          "with": "*:base",
+          "produces": "slurry",
+          "rate": 0.7,
+          "releases": {
+            "thermal": 25
+          }
+        }
+      ],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -10,
+            40
+          ],
+          "aether_density": [
+            0.2,
+            1.0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 60
+      }
+    },
+    {
+      "id": "heartwood",
+      "class": "organic",
+      "tags": [
+        "organic",
+        "fuel"
+      ],
+      "density": 0.75,
+      "hardness": 1.1,
+      "toughness": 0.48,
+      "elasticity": 0.35,
+      "friction": 0.55,
+      "heat_capacity": 1.8,
+      "thermal_conductivity": 0.12,
+      "conductivity": 0.03,
+      "aether_permeability": 0.3,
+      "aether_capacity": 1.2,
+      "discharge_threshold": 0.9,
+      "corrosion_resistance": 0.35,
+      "phase_points": {
+        "ignite": 260
+      },
+      "phase_products": {
+        "ignite": "ashwood_char"
+      },
+      "phase_energy": {
+        "ignite": 440
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -25,
+            45
+          ],
+          "aether_density": [
+            0.0,
+            0.9
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 32
+      }
+    },
+    {
+      "id": "pitchwood",
+      "class": "organic",
+      "tags": [
+        "organic",
+        "fuel",
+        "volatile"
+      ],
+      "density": 0.82,
+      "hardness": 0.9,
+      "toughness": 0.4,
+      "elasticity": 0.3,
+      "friction": 0.6,
+      "heat_capacity": 1.9,
+      "thermal_conductivity": 0.14,
+      "conductivity": 0.04,
+      "aether_permeability": 0.32,
+      "aether_capacity": 1.3,
+      "discharge_threshold": 1.0,
+      "corrosion_resistance": 0.3,
+      "phase_points": {
+        "ignite": 150
+      },
+      "phase_products": {
+        "ignite": "ashwood_char"
+      },
+      "phase_energy": {
+        "ignite": 570
+      },
+      "reactions": [
+        {
+          "with": "*:oxidiser",
+          "produces": "blastfire",
+          "rate": 0.4,
+          "releases": {
+            "thermal": 500
+          }
+        }
+      ],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -15,
+            40
+          ],
+          "aether_density": [
+            0.0,
+            0.8
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 18
+      }
+    },
+    {
+      "id": "flesh",
+      "class": "organic",
+      "tags": [
+        "organic",
+        "fuel",
+        "water"
+      ],
+      "density": 1.02,
+      "hardness": 0.4,
+      "toughness": 0.62,
+      "elasticity": 0.58,
+      "friction": 0.5,
+      "heat_capacity": 3.6,
+      "thermal_conductivity": 0.28,
+      "conductivity": 1.2,
+      "aether_permeability": 0.48,
+      "aether_capacity": 1.6,
+      "discharge_threshold": 1.2,
+      "corrosion_resistance": 0.25,
+      "phase_points": {
+        "ignite": 340,
+        "solidify": -3
+      },
+      "phase_products": {
+        "ignite": "ashwood_char",
+        "solidify": "frozen_flesh"
+      },
+      "phase_energy": {
+        "ignite": 220,
+        "solidify": 80
+      },
+      "reactions": [
+        {
+          "with": "*:acid",
+          "produces": "slurry",
+          "rate": 0.7,
+          "releases": {
+            "thermal": 55
+          }
+        },
+        {
+          "with": "*:base",
+          "produces": "slurry",
+          "rate": 0.85,
+          "releases": {
+            "thermal": 40
+          }
+        }
+      ],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -20,
+            45
+          ],
+          "aether_density": [
+            0.0,
+            1.0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 5
+      }
+    },
+    {
+      "id": "frozen_flesh",
+      "class": "organic",
+      "tags": [
+        "organic",
+        "fuel"
+      ],
+      "$comment": "Hardness up sevenfold, toughness down twelvefold. Nothing implements 'freeze then shatter'; this row is the whole mechanism.",
+      "density": 0.98,
+      "hardness": 3.1,
+      "toughness": 0.05,
+      "elasticity": 0.08,
+      "friction": 0.42,
+      "heat_capacity": 2.0,
+      "thermal_conductivity": 0.55,
+      "conductivity": 0.22,
+      "aether_permeability": 0.44,
+      "aether_capacity": 1.5,
+      "discharge_threshold": 1.1,
+      "corrosion_resistance": 0.35,
+      "phase_points": {
+        "melt": 0
+      },
+      "phase_products": {
+        "melt": "flesh"
+      },
+      "phase_energy": {
+        "melt": 86
+      },
+      "reactions": [
+        {
+          "with": "*:acid",
+          "produces": "slurry",
+          "rate": 0.4,
+          "releases": {
+            "thermal": 45
+          }
+        }
+      ],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -200,
+            -3
+          ],
+          "aether_density": [
+            0.0,
+            1.0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 350
+      }
+    },
+    {
+      "id": "chitin",
+      "class": "organic",
+      "tags": [
+        "organic",
+        "fuel"
+      ],
+      "density": 1.35,
+      "hardness": 4.8,
+      "toughness": 0.09,
+      "elasticity": 0.18,
+      "friction": 0.48,
+      "heat_capacity": 1.2,
+      "thermal_conductivity": 0.06,
+      "conductivity": 0.06,
+      "aether_permeability": 0.38,
+      "aether_capacity": 1.4,
+      "discharge_threshold": 1.1,
+      "corrosion_resistance": 0.6,
+      "phase_points": {
+        "ignite": 340
+      },
+      "phase_products": {
+        "ignite": "ashwood_char"
+      },
+      "phase_energy": {
+        "ignite": 220
+      },
+      "reactions": [
+        {
+          "with": "*:base",
+          "produces": "slurry",
+          "rate": 0.3,
+          "releases": {
+            "thermal": 20
+          }
+        }
+      ],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -10,
+            45
+          ],
+          "aether_density": [
+            0.0,
+            1.0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 70
+      }
+    },
+    {
+      "id": "bone",
+      "class": "organic",
+      "tags": [
+        "organic"
+      ],
+      "density": 1.85,
+      "hardness": 3.4,
+      "toughness": 0.28,
+      "elasticity": 0.2,
+      "friction": 0.55,
+      "heat_capacity": 1.1,
+      "thermal_conductivity": 0.1,
+      "conductivity": 0.1,
+      "aether_permeability": 0.36,
+      "aether_capacity": 1.3,
+      "discharge_threshold": 1.0,
+      "corrosion_resistance": 0.5,
+      "phase_points": {
+        "ignite": 480
+      },
+      "phase_products": {
+        "ignite": "quicklime"
+      },
+      "phase_energy": {
+        "ignite": 920
+      },
+      "reactions": [
+        {
+          "with": "*:acid",
+          "produces": "slurry",
+          "rate": 0.4,
+          "releases": {
+            "thermal": 35
+          }
+        }
+      ],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -30,
+            45
+          ],
+          "aether_density": [
+            0.0,
+            1.0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 50
+      }
+    },
+    {
+      "id": "tallow",
+      "class": "organic",
+      "tags": [
+        "organic",
+        "fuel"
+      ],
+      "density": 0.9,
+      "hardness": 0.15,
+      "toughness": 0.2,
+      "elasticity": 0.1,
+      "friction": 0.35,
+      "heat_capacity": 2.0,
+      "thermal_conductivity": 0.08,
+      "conductivity": 0.05,
+      "aether_permeability": 0.4,
+      "aether_capacity": 1.0,
+      "discharge_threshold": 0.8,
+      "corrosion_resistance": 0.2,
+      "phase_points": {
+        "melt": 40,
+        "ignite": 180
+      },
+      "phase_products": {
+        "melt": "tallow_melt",
+        "ignite": "soot"
+      },
+      "phase_energy": {
+        "melt": 30,
+        "ignite": 320
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -30,
+            38
+          ],
+          "aether_density": [
+            0.0,
+            1.0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 52
+      }
+    },
+    {
+      "id": "tallow_melt",
+      "class": "fluid",
+      "tags": [
+        "organic",
+        "fuel"
+      ],
+      "density": 0.85,
+      "hardness": 0.0,
+      "toughness": 0.0,
+      "elasticity": 0.0,
+      "friction": 0.1,
+      "heat_capacity": 2.1,
+      "thermal_conductivity": 0.09,
+      "conductivity": 0.05,
+      "aether_permeability": 0.42,
+      "aether_capacity": 1.0,
+      "discharge_threshold": 0.8,
+      "corrosion_resistance": 0.2,
+      "phase_points": {
+        "ignite": 180,
+        "solidify": 34
+      },
+      "phase_products": {
+        "ignite": "soot",
+        "solidify": "tallow"
+      },
+      "phase_energy": {
+        "ignite": 320,
+        "solidify": 30
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            34,
+            180
+          ],
+          "aether_density": [
+            0.0,
+            1.0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 54
+      }
+    },
+    {
+      "id": "water",
+      "class": "fluid",
+      "tags": [
+        "solvent",
+        "water"
+      ],
+      "density": 1.0,
+      "hardness": 0.0,
+      "toughness": 0.0,
+      "elasticity": 0.0,
+      "friction": 0.02,
+      "heat_capacity": 4.2,
+      "thermal_conductivity": 0.6,
+      "conductivity": 2.8,
+      "aether_permeability": 0.75,
+      "aether_capacity": 2.0,
+      "discharge_threshold": 1.5,
+      "corrosion_resistance": 1.0,
+      "phase_points": {
+        "boil": 100,
+        "solidify": -2
+      },
+      "phase_products": {
+        "boil": "steam",
+        "solidify": "ice"
+      },
+      "phase_energy": {
+        "boil": 200,
+        "solidify": 120
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -2,
+            100
+          ],
+          "aether_density": [
+            0.0,
+            1.0
+          ],
+          "depth": [
+            0,
+            400
+          ]
+        },
+        "abundance": 0.6
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 210
+      }
+    },
+    {
+      "id": "ice",
+      "class": "mineral",
+      "tags": [
+        "water",
+        "mineral"
+      ],
+      "density": 0.92,
+      "hardness": 2.6,
+      "toughness": 0.06,
+      "elasticity": 0.12,
+      "friction": 0.1,
+      "heat_capacity": 2.1,
+      "thermal_conductivity": 0.55,
+      "conductivity": 0.3,
+      "aether_permeability": 0.7,
+      "aether_capacity": 1.8,
+      "discharge_threshold": 1.3,
+      "corrosion_resistance": 0.9,
+      "phase_points": {
+        "melt": 0
+      },
+      "phase_products": {
+        "melt": "water"
+      },
+      "phase_energy": {
+        "melt": 126
+      },
+      "reactions": [
+        {
+          "with": "*:salt",
+          "produces": "water",
+          "rate": 0.7,
+          "releases": {
+            "thermal": -180
+          }
+        }
+      ],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -200,
+            0
+          ],
+          "aether_density": [
+            0.0,
+            1.0
+          ],
+          "depth": [
+            0,
+            400
+          ]
+        },
+        "abundance": 0.2
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 196
+      }
+    },
+    {
+      "id": "steam",
+      "class": "gas",
+      "tags": [
+        "water",
+        "volatile"
+      ],
+      "density": 0.05,
+      "hardness": 0.0,
+      "toughness": 0.0,
+      "elasticity": 0.0,
+      "friction": 0.01,
+      "heat_capacity": 2.0,
+      "thermal_conductivity": 0.25,
+      "conductivity": 0.9,
+      "aether_permeability": 0.95,
+      "aether_capacity": 1.0,
+      "discharge_threshold": 0.7,
+      "corrosion_resistance": 1.0,
+      "phase_points": {
+        "solidify": 96
+      },
+      "phase_products": {
+        "solidify": "water"
+      },
+      "phase_energy": {
+        "solidify": 200
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            96,
+            4000
+          ],
+          "aether_density": [
+            0.0,
+            1.0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 200
+      }
+    },
+    {
+      "id": "brine",
+      "class": "fluid",
+      "tags": [
+        "solvent",
+        "water",
+        "salt"
+      ],
+      "density": 1.15,
+      "hardness": 0.0,
+      "toughness": 0.0,
+      "elasticity": 0.0,
+      "friction": 0.02,
+      "heat_capacity": 3.9,
+      "thermal_conductivity": 0.62,
+      "conductivity": 4.5,
+      "aether_permeability": 0.78,
+      "aether_capacity": 2.4,
+      "discharge_threshold": 1.8,
+      "corrosion_resistance": 1.0,
+      "phase_points": {
+        "boil": 106,
+        "solidify": -18
+      },
+      "phase_products": {
+        "boil": "steam",
+        "solidify": "ice"
+      },
+      "phase_energy": {
+        "boil": 200,
+        "solidify": 110
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -18,
+            106
+          ],
+          "aether_density": [
+            0.0,
+            1.0
+          ],
+          "depth": [
+            0,
+            400
+          ]
+        },
+        "abundance": 0.12
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 188
+      }
+    },
+    {
+      "id": "aqua_vitriol",
+      "class": "fluid",
+      "tags": [
+        "solvent",
+        "acid"
+      ],
+      "density": 1.45,
+      "hardness": 0.0,
+      "toughness": 0.0,
+      "elasticity": 0.0,
+      "friction": 0.03,
+      "heat_capacity": 2.6,
+      "thermal_conductivity": 0.42,
+      "conductivity": 1.6,
+      "aether_permeability": 0.55,
+      "aether_capacity": 1.8,
+      "discharge_threshold": 1.3,
+      "corrosion_resistance": 1.0,
+      "phase_points": {
+        "boil": 190
+      },
+      "phase_products": {
+        "boil": "steam"
+      },
+      "phase_energy": {
+        "boil": 200
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            0,
+            190
+          ],
+          "aether_density": [
+            0.1,
+            0.9
+          ],
+          "depth": [
+            0,
+            200
+          ]
+        },
+        "abundance": 0.01
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 90
+      }
+    },
+    {
+      "id": "lye",
+      "class": "fluid",
+      "tags": [
+        "solvent",
+        "base"
+      ],
+      "density": 1.22,
+      "hardness": 0.0,
+      "toughness": 0.0,
+      "elasticity": 0.0,
+      "friction": 0.03,
+      "heat_capacity": 3.2,
+      "thermal_conductivity": 0.45,
+      "conductivity": 2.2,
+      "aether_permeability": 0.6,
+      "aether_capacity": 1.9,
+      "discharge_threshold": 1.4,
+      "corrosion_resistance": 1.0,
+      "phase_points": {
+        "boil": 145
+      },
+      "phase_products": {
+        "boil": "steam"
+      },
+      "phase_energy": {
+        "boil": 200
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            0,
+            0
+          ],
+          "aether_density": [
+            0,
+            0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 100
+      }
+    },
+    {
+      "id": "lamp_oil",
+      "class": "fluid",
+      "tags": [
+        "fuel",
+        "volatile"
+      ],
+      "density": 0.86,
+      "hardness": 0.0,
+      "toughness": 0.0,
+      "elasticity": 0.0,
+      "friction": 0.04,
+      "heat_capacity": 2.1,
+      "thermal_conductivity": 0.18,
+      "conductivity": 0.05,
+      "aether_permeability": 0.3,
+      "aether_capacity": 1.2,
+      "discharge_threshold": 0.9,
+      "corrosion_resistance": 0.85,
+      "phase_points": {
+        "boil": 210,
+        "ignite": 90
+      },
+      "phase_products": {
+        "boil": "aether_vapor",
+        "ignite": "soot"
+      },
+      "phase_energy": {
+        "boil": 200,
+        "ignite": 440
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            0,
+            0
+          ],
+          "aether_density": [
+            0,
+            0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 42
+      }
+    },
+    {
+      "id": "aether_vapor",
+      "class": "gas",
+      "tags": [
+        "aetheric",
+        "volatile"
+      ],
+      "$comment": "Condenses back into hoarfrost quartz 200 degrees below where the quartz boils. A cycle, deliberately \u2014 the wide gap makes it a slow geological loop rather than an oscillation, and its net latent energy is exactly zero so tools/fuzz.ts passes it.",
+      "density": 0.12,
+      "hardness": 0.0,
+      "toughness": 0.0,
+      "elasticity": 0.0,
+      "friction": 0.01,
+      "heat_capacity": 1.4,
+      "thermal_conductivity": 0.8,
+      "conductivity": 3.2,
+      "aether_permeability": 1.0,
+      "aether_capacity": 6.0,
+      "discharge_threshold": 2.0,
+      "corrosion_resistance": 1.0,
+      "phase_points": {
+        "solidify": -60
+      },
+      "phase_products": {
+        "solidify": "hoarfrost_quartz"
+      },
+      "phase_energy": {
+        "solidify": 220
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -60,
+            4000
+          ],
+          "aether_density": [
+            0.4,
+            1.0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 270
+      }
+    },
+    {
+      "id": "pale_aether_core",
+      "class": "aetheric",
+      "tags": [
+        "aetheric"
+      ],
+      "$comment": "Huge capacity, low threshold: it will not hold what it can carry, so it sheds constantly. Harvested from creatures and anomalies; \u00a76.3's socket contents.",
+      "density": 1.6,
+      "hardness": 2.2,
+      "toughness": 0.3,
+      "elasticity": 0.3,
+      "friction": 0.4,
+      "heat_capacity": 0.9,
+      "thermal_conductivity": 0.65,
+      "conductivity": 2.2,
+      "aether_permeability": 0.8,
+      "aether_capacity": 22.0,
+      "discharge_threshold": 6.0,
+      "corrosion_resistance": 0.85,
+      "phase_points": {
+        "melt": 620
+      },
+      "phase_products": {
+        "melt": "aether_vapor"
+      },
+      "phase_energy": {
+        "melt": 250
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            -60,
+            300
+          ],
+          "aether_density": [
+            0.8,
+            1.0
+          ],
+          "depth": [
+            0,
+            2000
+          ]
+        },
+        "abundance": 0.004
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 285
+      }
+    },
+    {
+      "id": "magma",
+      "class": "fluid",
+      "tags": [
+        "mineral"
+      ],
+      "density": 2.9,
+      "hardness": 0.0,
+      "toughness": 0.0,
+      "elasticity": 0.0,
+      "friction": 0.3,
+      "heat_capacity": 1.0,
+      "thermal_conductivity": 0.6,
+      "conductivity": 0.4,
+      "aether_permeability": 0.3,
+      "aether_capacity": 2.2,
+      "discharge_threshold": 1.6,
+      "corrosion_resistance": 0.9,
+      "phase_points": {
+        "solidify": 900
+      },
+      "phase_products": {
+        "solidify": "basalt"
+      },
+      "phase_energy": {
+        "solidify": 200
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            900,
+            4000
+          ],
+          "aether_density": [
+            0.0,
+            1.0
+          ],
+          "depth": [
+            800,
+            100000
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 12
+      }
+    },
+    {
+      "id": "iron_melt",
+      "class": "fluid",
+      "tags": [
+        "metal"
+      ],
+      "density": 7.0,
+      "hardness": 0.0,
+      "toughness": 0.0,
+      "elasticity": 0.0,
+      "friction": 0.2,
+      "heat_capacity": 0.5,
+      "thermal_conductivity": 2.6,
+      "conductivity": 3.0,
+      "aether_permeability": 0.2,
+      "aether_capacity": 2.8,
+      "discharge_threshold": 2.0,
+      "corrosion_resistance": 0.4,
+      "phase_points": {
+        "solidify": 1440
+      },
+      "phase_products": {
+        "solidify": "cold_iron"
+      },
+      "phase_energy": {
+        "solidify": 250
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            1440,
+            4000
+          ],
+          "aether_density": [
+            0.0,
+            1.0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 15
+      }
+    },
+    {
+      "id": "copper_melt",
+      "class": "fluid",
+      "tags": [
+        "metal"
+      ],
+      "density": 8.0,
+      "hardness": 0.0,
+      "toughness": 0.0,
+      "elasticity": 0.0,
+      "friction": 0.18,
+      "heat_capacity": 0.42,
+      "thermal_conductivity": 4.0,
+      "conductivity": 5.5,
+      "aether_permeability": 0.3,
+      "aether_capacity": 3.6,
+      "discharge_threshold": 2.6,
+      "corrosion_resistance": 0.55,
+      "phase_points": {
+        "solidify": 1040
+      },
+      "phase_products": {
+        "solidify": "copper"
+      },
+      "phase_energy": {
+        "solidify": 220
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            1040,
+            4000
+          ],
+          "aether_density": [
+            0.0,
+            1.0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 18
+      }
+    },
+    {
+      "id": "tin_melt",
+      "class": "fluid",
+      "tags": [
+        "metal"
+      ],
+      "density": 6.9,
+      "hardness": 0.0,
+      "toughness": 0.0,
+      "elasticity": 0.0,
+      "friction": 0.12,
+      "heat_capacity": 0.24,
+      "thermal_conductivity": 2.2,
+      "conductivity": 3.2,
+      "aether_permeability": 0.28,
+      "aether_capacity": 2.0,
+      "discharge_threshold": 1.5,
+      "corrosion_resistance": 0.6,
+      "phase_points": {
+        "solidify": 220
+      },
+      "phase_products": {
+        "solidify": "tin"
+      },
+      "phase_energy": {
+        "solidify": 100
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            220,
+            4000
+          ],
+          "aether_density": [
+            0.0,
+            1.0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 202
+      }
+    },
+    {
+      "id": "quartz_melt",
+      "class": "fluid",
+      "tags": [
+        "mineral",
+        "aetheric"
+      ],
+      "density": 1.9,
+      "hardness": 0.0,
+      "toughness": 0.0,
+      "elasticity": 0.0,
+      "friction": 0.2,
+      "heat_capacity": 0.6,
+      "thermal_conductivity": 0.85,
+      "conductivity": 0.1,
+      "aether_permeability": 0.92,
+      "aether_capacity": 3.6,
+      "discharge_threshold": 2.9,
+      "corrosion_resistance": 0.66,
+      "phase_points": {
+        "boil": 150,
+        "solidify": 38
+      },
+      "phase_products": {
+        "boil": "aether_vapor",
+        "solidify": "hoarfrost_quartz"
+      },
+      "phase_energy": {
+        "boil": 220,
+        "solidify": 90
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            38,
+            150
+          ],
+          "aether_density": [
+            0.5,
+            1.0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 192
+      }
+    },
+    {
+      "id": "blastfire",
+      "class": "residue",
+      "tags": [
+        "fuel",
+        "oxidiser",
+        "volatile"
+      ],
+      "$comment": "An unstable intermediate: it ignites at 60, barely above ambient, and releases more than any other row. Nothing calls it an explosive. It is one reaction product with one low ignition point.",
+      "density": 0.4,
+      "hardness": 0.0,
+      "toughness": 0.0,
+      "elasticity": 0.0,
+      "friction": 0.02,
+      "heat_capacity": 0.5,
+      "thermal_conductivity": 0.7,
+      "conductivity": 1.0,
+      "aether_permeability": 0.75,
+      "aether_capacity": 1.5,
+      "discharge_threshold": 1.0,
+      "corrosion_resistance": 0.1,
+      "phase_points": {
+        "ignite": 60
+      },
+      "phase_products": {
+        "ignite": "soot"
+      },
+      "phase_energy": {
+        "ignite": 1200
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            0,
+            0
+          ],
+          "aether_density": [
+            0,
+            0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 8
+      }
+    },
+    {
+      "id": "ashwood_char",
+      "class": "residue",
+      "tags": [
+        "mineral"
+      ],
+      "density": 0.35,
+      "hardness": 0.7,
+      "toughness": 0.1,
+      "elasticity": 0.06,
+      "friction": 0.7,
+      "heat_capacity": 0.9,
+      "thermal_conductivity": 0.08,
+      "conductivity": 0.1,
+      "aether_permeability": 0.45,
+      "aether_capacity": 0.8,
+      "discharge_threshold": 0.6,
+      "corrosion_resistance": 0.55,
+      "phase_points": {},
+      "phase_products": {},
+      "phase_energy": {},
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            0,
+            0
+          ],
+          "aether_density": [
+            0,
+            0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 0
+      }
+    },
+    {
+      "id": "soot",
+      "class": "residue",
+      "tags": [
+        "mineral"
+      ],
+      "density": 0.25,
+      "hardness": 0.2,
+      "toughness": 0.1,
+      "elasticity": 0.05,
+      "friction": 0.6,
+      "heat_capacity": 0.8,
+      "thermal_conductivity": 0.1,
+      "conductivity": 0.06,
+      "aether_permeability": 0.5,
+      "aether_capacity": 0.7,
+      "discharge_threshold": 0.5,
+      "corrosion_resistance": 0.7,
+      "phase_points": {},
+      "phase_products": {},
+      "phase_energy": {},
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            0,
+            0
+          ],
+          "aether_density": [
+            0,
+            0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 0
+      }
+    },
+    {
+      "id": "slag",
+      "class": "residue",
+      "tags": [
+        "mineral"
+      ],
+      "density": 3.2,
+      "hardness": 2.0,
+      "toughness": 0.15,
+      "elasticity": 0.08,
+      "friction": 0.62,
+      "heat_capacity": 0.7,
+      "thermal_conductivity": 0.2,
+      "conductivity": 0.05,
+      "aether_permeability": 0.28,
+      "aether_capacity": 1.0,
+      "discharge_threshold": 0.8,
+      "corrosion_resistance": 0.95,
+      "phase_points": {
+        "melt": 1250
+      },
+      "phase_products": {
+        "melt": "magma"
+      },
+      "phase_energy": {
+        "melt": 200
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            0,
+            0
+          ],
+          "aether_density": [
+            0,
+            0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 220
+      }
+    },
+    {
+      "id": "rust",
+      "class": "residue",
+      "tags": [
+        "mineral",
+        "metal"
+      ],
+      "density": 4.5,
+      "hardness": 1.2,
+      "toughness": 0.1,
+      "elasticity": 0.06,
+      "friction": 0.68,
+      "heat_capacity": 0.9,
+      "thermal_conductivity": 0.3,
+      "conductivity": 0.1,
+      "aether_permeability": 0.3,
+      "aether_capacity": 1.2,
+      "discharge_threshold": 0.9,
+      "corrosion_resistance": 0.98,
+      "phase_points": {
+        "melt": 1350
+      },
+      "phase_products": {
+        "melt": "magma"
+      },
+      "phase_energy": {
+        "melt": 200
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            0,
+            0
+          ],
+          "aether_density": [
+            0,
+            0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 22
+      }
+    },
+    {
+      "id": "verdigris",
+      "class": "residue",
+      "tags": [
+        "mineral",
+        "metal"
+      ],
+      "density": 3.6,
+      "hardness": 1.0,
+      "toughness": 0.12,
+      "elasticity": 0.08,
+      "friction": 0.7,
+      "heat_capacity": 0.9,
+      "thermal_conductivity": 0.35,
+      "conductivity": 0.2,
+      "aether_permeability": 0.3,
+      "aether_capacity": 1.2,
+      "discharge_threshold": 0.9,
+      "corrosion_resistance": 0.95,
+      "phase_points": {
+        "melt": 1150
+      },
+      "phase_products": {
+        "melt": "magma"
+      },
+      "phase_energy": {
+        "melt": 200
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            0,
+            0
+          ],
+          "aether_density": [
+            0,
+            0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 155
+      }
+    },
+    {
+      "id": "grit",
+      "class": "residue",
+      "tags": [
+        "mineral",
+        "abrasive"
+      ],
+      "density": 2.6,
+      "hardness": 3.0,
+      "toughness": 0.1,
+      "elasticity": 0.08,
+      "friction": 0.85,
+      "heat_capacity": 0.8,
+      "thermal_conductivity": 0.28,
+      "conductivity": 0.02,
+      "aether_permeability": 0.3,
+      "aether_capacity": 1.4,
+      "discharge_threshold": 1.1,
+      "corrosion_resistance": 0.9,
+      "phase_points": {
+        "melt": 1250
+      },
+      "phase_products": {
+        "melt": "magma"
+      },
+      "phase_energy": {
+        "melt": 200
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            0,
+            0
+          ],
+          "aether_density": [
+            0,
+            0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 38
+      }
+    },
+    {
+      "id": "quicklime",
+      "class": "residue",
+      "tags": [
+        "mineral",
+        "base"
+      ],
+      "density": 2.3,
+      "hardness": 1.4,
+      "toughness": 0.1,
+      "elasticity": 0.06,
+      "friction": 0.7,
+      "heat_capacity": 0.8,
+      "thermal_conductivity": 0.25,
+      "conductivity": 0.04,
+      "aether_permeability": 0.35,
+      "aether_capacity": 1.1,
+      "discharge_threshold": 0.9,
+      "corrosion_resistance": 0.4,
+      "phase_points": {
+        "melt": 1500
+      },
+      "phase_products": {
+        "melt": "magma"
+      },
+      "phase_energy": {
+        "melt": 200
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            0,
+            0
+          ],
+          "aether_density": [
+            0,
+            0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 45
+      }
+    },
+    {
+      "id": "slurry",
+      "class": "fluid",
+      "tags": [
+        "solvent"
+      ],
+      "density": 1.3,
+      "hardness": 0.0,
+      "toughness": 0.0,
+      "elasticity": 0.0,
+      "friction": 0.03,
+      "heat_capacity": 3.0,
+      "thermal_conductivity": 0.4,
+      "conductivity": 1.6,
+      "aether_permeability": 0.55,
+      "aether_capacity": 1.6,
+      "discharge_threshold": 1.2,
+      "corrosion_resistance": 1.0,
+      "phase_points": {
+        "boil": 120
+      },
+      "phase_products": {
+        "boil": "steam"
+      },
+      "phase_energy": {
+        "boil": 200
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            0,
+            0
+          ],
+          "aether_density": [
+            0,
+            0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 80
+      }
+    },
+    {
+      "id": "quartz_slurry",
+      "class": "fluid",
+      "tags": [
+        "solvent",
+        "aetheric"
+      ],
+      "density": 1.5,
+      "hardness": 0.0,
+      "toughness": 0.0,
+      "elasticity": 0.0,
+      "friction": 0.04,
+      "heat_capacity": 2.4,
+      "thermal_conductivity": 0.55,
+      "conductivity": 1.8,
+      "aether_permeability": 0.85,
+      "aether_capacity": 2.6,
+      "discharge_threshold": 2.0,
+      "corrosion_resistance": 1.0,
+      "phase_points": {
+        "boil": 130
+      },
+      "phase_products": {
+        "boil": "aether_vapor"
+      },
+      "phase_energy": {
+        "boil": 220
+      },
+      "reactions": [],
+      "formation": {
+        "requires": {
+          "temperature": [
+            0,
+            0
+          ],
+          "aether_density": [
+            0,
+            0
+          ],
+          "depth": [
+            0,
+            0
+          ]
+        },
+        "abundance": 0.0
+      },
+      "appearance": {
+        "derive_from_properties": true,
+        "hue_bias": 175
+      }
+    }
+  ]
+}

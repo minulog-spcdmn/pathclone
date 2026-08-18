@@ -1,0 +1,206 @@
+{
+  "$comment": "DESIGN.md §6.1. Forms are geometry and attachment topology and nothing else — 'rules about shape, not content'. No form here knows what it will be made of, and none carries a statistic: mass, swing speed, impulse profile and durability are all derived at the point of use from the materials that end up in the slots. The §6.1 target is ~60 forms; M1 needs melee and bodies, so these are the ones that exist.",
+
+  "forms": [
+    {
+      "id": "blade_straight_single_edge",
+      "parts": [
+        { "id": "blade", "volume": 0.45 },
+        { "id": "guard", "volume": 0.08 },
+        { "id": "grip", "volume": 0.12 }
+      ],
+      "links": [["blade", "guard"], ["guard", "grip"]],
+      "strike_part": "blade",
+      "edge_area": 0.30,
+      "leverage": 1.20,
+      "max_speed": 4.0,
+      "reach": 1.10
+    },
+    {
+      "id": "blade_curved_single_edge",
+      "$comment": "§6.1's worked example, socket and all.",
+      "parts": [
+        { "id": "blade", "volume": 0.40 },
+        { "id": "guard", "volume": 0.10 },
+        { "id": "grip", "volume": 0.15 },
+        { "id": "socket", "volume": 0.02 }
+      ],
+      "links": [["blade", "guard"], ["guard", "grip"], ["guard", "socket"]],
+      "strike_part": "blade",
+      "edge_area": 0.26,
+      "leverage": 1.30,
+      "max_speed": 4.2,
+      "reach": 1.15
+    },
+    {
+      "id": "dagger_leaf",
+      "parts": [
+        { "id": "blade", "volume": 0.10 },
+        { "id": "grip", "volume": 0.05 }
+      ],
+      "links": [["blade", "grip"]],
+      "strike_part": "blade",
+      "edge_area": 0.10,
+      "leverage": 0.70,
+      "max_speed": 6.5,
+      "reach": 0.45
+    },
+    {
+      "id": "maul_head_haft",
+      "$comment": "Large edge area and high leverage: it cannot penetrate anything, and it does not need to.",
+      "parts": [
+        { "id": "head", "volume": 1.20 },
+        { "id": "haft", "volume": 0.30 },
+        { "id": "grip", "volume": 0.10 }
+      ],
+      "links": [["head", "haft"], ["haft", "grip"]],
+      "strike_part": "head",
+      "edge_area": 3.20,
+      "leverage": 4.00,
+      "max_speed": 2.2,
+      "reach": 1.40
+    },
+    {
+      "id": "axe_head_haft",
+      "parts": [
+        { "id": "head", "volume": 0.55 },
+        { "id": "haft", "volume": 0.25 },
+        { "id": "grip", "volume": 0.08 }
+      ],
+      "links": [["head", "haft"], ["haft", "grip"]],
+      "strike_part": "head",
+      "edge_area": 0.80,
+      "leverage": 2.60,
+      "max_speed": 2.8,
+      "reach": 1.20
+    },
+    {
+      "id": "spear_point_shaft",
+      "parts": [
+        { "id": "point", "volume": 0.12 },
+        { "id": "shaft", "volume": 0.40 },
+        { "id": "grip", "volume": 0.06 }
+      ],
+      "links": [["point", "shaft"], ["shaft", "grip"]],
+      "strike_part": "point",
+      "edge_area": 0.09,
+      "leverage": 1.60,
+      "max_speed": 3.6,
+      "reach": 2.40
+    },
+    {
+      "id": "plate_segment",
+      "parts": [
+        { "id": "plate", "volume": 0.90 },
+        { "id": "strap", "volume": 0.08 }
+      ],
+      "links": [["plate", "strap"]],
+      "strike_part": "plate",
+      "edge_area": 4.00,
+      "leverage": 0.50,
+      "max_speed": 1.5,
+      "reach": 0.30
+    },
+    {
+      "id": "body_bipedal",
+      "$comment": "The form a player uses. Also the form a bandit uses. §4.1 is explicit that nothing may tell them apart, and nothing here does.",
+      "parts": [
+        { "id": "torso", "volume": 1.60 },
+        { "id": "head", "volume": 0.50 },
+        { "id": "arm_left", "volume": 0.40 },
+        { "id": "arm_right", "volume": 0.40 },
+        { "id": "leg_left", "volume": 0.60 },
+        { "id": "leg_right", "volume": 0.60 },
+        { "id": "hide", "volume": 0.30 }
+      ],
+      "links": [
+        ["torso", "head"],
+        ["torso", "arm_left"],
+        ["torso", "arm_right"],
+        ["torso", "leg_left"],
+        ["torso", "leg_right"],
+        ["torso", "hide"]
+      ],
+      "strike_part": "arm_right",
+      "edge_area": 1.20,
+      "leverage": 0.90,
+      "max_speed": 3.0,
+      "reach": 0.90
+    },
+    {
+      "id": "body_carapace",
+      "parts": [
+        { "id": "torso", "volume": 1.20 },
+        { "id": "plate_dorsal", "volume": 0.80 },
+        { "id": "plate_head", "volume": 0.35 },
+        { "id": "limb_fore_left", "volume": 0.30 },
+        { "id": "limb_fore_right", "volume": 0.30 },
+        { "id": "limb_hind_left", "volume": 0.30 },
+        { "id": "limb_hind_right", "volume": 0.30 }
+      ],
+      "links": [
+        ["torso", "plate_dorsal"],
+        ["torso", "plate_head"],
+        ["torso", "limb_fore_left"],
+        ["torso", "limb_fore_right"],
+        ["torso", "limb_hind_left"],
+        ["torso", "limb_hind_right"]
+      ],
+      "strike_part": "limb_fore_right",
+      "edge_area": 0.50,
+      "leverage": 1.00,
+      "max_speed": 3.2,
+      "reach": 1.00
+    },
+    {
+      "id": "vessel_flask",
+      "$comment": "A shell linked to its contents. Break the shell and whatever was inside is loose in the world with its own material properties.",
+      "parts": [
+        { "id": "shell", "volume": 0.06 },
+        { "id": "contents", "volume": 0.30 }
+      ],
+      "links": [["shell", "contents"]],
+      "strike_part": "shell",
+      "edge_area": 0.50,
+      "leverage": 0.80,
+      "max_speed": 3.0,
+      "reach": 0.60
+    },
+    {
+      "id": "torch_brand",
+      "parts": [
+        { "id": "head", "volume": 0.20 },
+        { "id": "haft", "volume": 0.18 }
+      ],
+      "links": [["head", "haft"]],
+      "strike_part": "head",
+      "edge_area": 0.60,
+      "leverage": 1.10,
+      "max_speed": 3.4,
+      "reach": 0.80
+    },
+    {
+      "id": "anvil_block",
+      "parts": [{ "id": "block", "volume": 3.00 }],
+      "links": [],
+      "strike_part": "block",
+      "edge_area": 2.00,
+      "leverage": 1.00,
+      "max_speed": 1.0,
+      "reach": 0.50
+    },
+    {
+      "id": "grindstone_wheel",
+      "parts": [
+        { "id": "wheel", "volume": 1.00 },
+        { "id": "axle", "volume": 0.10 }
+      ],
+      "links": [["wheel", "axle"]],
+      "strike_part": "wheel",
+      "edge_area": 0.15,
+      "leverage": 1.40,
+      "max_speed": 5.0,
+      "reach": 0.50
+    }
+  ]
+}
