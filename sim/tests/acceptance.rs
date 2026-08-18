@@ -242,6 +242,7 @@ fn a_rock_can_wield_a_sword() {
         Effectors {
             strength: Fx::from_ratio(7, 2),
             wielded: Some(sword),
+            recovery: Fx::ZERO,
         },
     );
 
@@ -296,5 +297,213 @@ fn no_system_asks_what_kind_of_entity_it_is_looking_at() {
         offenders.is_empty(),
         "§4.1 forbids type-discriminating code in the substrate:\n{}",
         offenders.join("\n")
+    );
+}
+
+// ---------------------------------------------------------------------------
+// §15 M1: "Basic forms and melee."
+// ---------------------------------------------------------------------------
+
+use sim::ecs::{Agency, Locomotion};
+use sim::events::EventKind;
+use sim::impulse::SwingOutcome;
+
+/// Stand a wielder at the origin facing +x, with a target `distance` away.
+fn duel(seed: u64, weapon_form: &str, weapon: &[&str], target: &str, distance: i32) -> Option<(Sim, u32, u32)> {
+    let mut s = world(seed)?;
+    let mats: Vec<_> = weapon.iter().map(|m| s.material_id(m).unwrap()).collect();
+    let form = s.form_id(weapon_form)?;
+    let body = s.forms.assemble(form, &mats)?;
+    let w = s.spawn(body, V3::ZERO);
+
+    let flesh = s.material_id("flesh")?;
+    let hide = s.material_id("boarhide")?;
+    let bipedal = s.form_id("body_bipedal")?;
+    let wielder_body = s
+        .forms
+        .assemble(bipedal, &[flesh, flesh, flesh, flesh, flesh, flesh, hide])?;
+    let t = s.rules.ambient_temp;
+    let attacker = s.spawn_at_temp(wielder_body, V3::ZERO, t);
+    s.ecs.effectors.insert(
+        attacker,
+        Effectors {
+            strength: Fx::from_ratio(7, 2),
+            wielded: Some(w),
+            recovery: Fx::ZERO,
+        },
+    );
+    s.ecs.agency.insert(attacker, Agency::default());
+
+    let dummy_form = s.form_id("training_dummy")?;
+    let wood = s.material_id("heartwood")?;
+    let stone = s.material_id("granite")?;
+    let target_id = s.material_id(target)?;
+    let dummy = s
+        .forms
+        .assemble(dummy_form, &[target_id, wood, stone])?;
+    let d = s.spawn_at_temp(dummy, V3::new(Fx::from_int(distance), Fx::ZERO, Fx::ZERO), t);
+    Some((s, attacker, d))
+}
+
+/// Reach is a real number derived from the form, and standing back is a defence.
+#[test]
+fn melee_respects_reach() {
+    let far = duel(21, "dagger_leaf", &["cold_iron", "boarhide"], "flesh", 6);
+    let (mut s, attacker, _) = match far {
+        Some(v) => v,
+        None => return,
+    };
+    assert_eq!(
+        s.swing(attacker),
+        SwingOutcome::Missed,
+        "a dagger connected across six units"
+    );
+
+    let near = duel(21, "dagger_leaf", &["cold_iron", "boarhide"], "flesh", 1);
+    let (mut s, attacker, dummy) = near.expect("data was present a moment ago");
+    match s.swing(attacker) {
+        SwingOutcome::Hit { target, .. } => assert_eq!(target, dummy),
+        other => panic!("a dagger at one unit did not connect: {other:?}"),
+    }
+}
+
+/// Facing matters: the same target, behind you, is not hit.
+#[test]
+fn a_swing_only_reaches_what_is_in_front_of_it() {
+    let (mut s, attacker, _) = match duel(22, "blade_straight_single_edge", &["cold_iron", "cold_iron", "boarhide"], "flesh", 1) {
+        Some(v) => v,
+        None => return,
+    };
+    // Facing away from a target that is otherwise well inside reach.
+    s.ecs.agency.insert(
+        attacker,
+        Agency {
+            facing: Fx::PI,
+            ..Default::default()
+        },
+    );
+    assert_eq!(
+        s.swing(attacker),
+        SwingOutcome::Missed,
+        "the swing found something behind the wielder"
+    );
+
+    s.ecs.effectors.get_mut(attacker).unwrap().recovery = Fx::ZERO;
+    s.ecs.agency.insert(attacker, Agency::default());
+    assert!(
+        matches!(s.swing(attacker), SwingOutcome::Hit { .. }),
+        "turning around did not help"
+    );
+}
+
+/// A heavy weapon is slow because it is heavy — §6.1's derived swing rate,
+/// spent as recovery.
+#[test]
+fn a_heavy_weapon_swings_less_often() {
+    let count = |form: &str, materials: &[&str]| -> Option<usize> {
+        let (mut s, attacker, _) = duel(23, form, materials, "flesh", 1)?;
+        s.ecs.agency.insert(
+            attacker,
+            Agency {
+                want_strike: true,
+                ..Default::default()
+            },
+        );
+        let start = s.tick;
+        for _ in 0..200 {
+            // Re-raise the intent every tick, as a held button would.
+            if let Some(a) = s.ecs.agency.get_mut(attacker) {
+                a.want_strike = true;
+            }
+            s.run(1);
+        }
+        Some(
+            s.events
+                .since(start)
+                .filter(|e| e.kind == EventKind::Swung && e.entity == attacker)
+                .count(),
+        )
+    };
+
+    let dagger = match count("dagger_leaf", &["cold_iron", "boarhide"]) {
+        Some(v) => v,
+        None => return,
+    };
+    let maul = count("maul_head_haft", &["cold_iron", "heartwood", "boarhide"]).unwrap();
+    assert!(dagger > 0 && maul > 0, "nothing swung at all");
+    assert!(
+        dagger > maul * 2,
+        "a dagger managed {dagger} swings and a maul {maul}; the derived rate is not reaching recovery"
+    );
+}
+
+/// §Appendix A, Items × Players: what you carry is felt in the legs.
+#[test]
+fn carrying_more_makes_you_slower() {
+    let top_speed = |form: &str, materials: &[&str]| -> Option<Fx> {
+        let (mut s, attacker, _) = duel(24, form, materials, "flesh", 40)?;
+        s.ecs.locomotion.insert(
+            attacker,
+            Locomotion {
+                max_speed: Fx::from_int(6),
+                accel: Fx::from_int(34),
+                mass_ref: Fx::from_int(12),
+            },
+        );
+        s.ecs.agency.insert(
+            attacker,
+            Agency {
+                move_dir: V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
+                ..Default::default()
+            },
+        );
+        s.run(60);
+        Some(s.ecs.transform.get(attacker)?.velocity.length())
+    };
+
+    let light = match top_speed("dagger_leaf", &["cold_iron", "boarhide"]) {
+        Some(v) => v,
+        None => return,
+    };
+    let heavy = top_speed("maul_head_haft", &["lead_grey", "heartwood", "boarhide"]).unwrap();
+    assert!(
+        light > heavy,
+        "a lead maul ({heavy:?}) did not slow the wielder below a dagger ({light:?})"
+    );
+}
+
+/// §P1 again, from the other side: the swing path reads `Agency`, so anything
+/// with the component swings — there is no player-only branch to find.
+#[test]
+fn anything_with_agency_can_swing() {
+    let (mut s, _, _) = match duel(25, "blade_straight_single_edge", &["cold_iron", "cold_iron", "boarhide"], "flesh", 1) {
+        Some(v) => v,
+        None => return,
+    };
+    let granite = s.material_id("granite").unwrap();
+    let iron = s.material_id("cold_iron").unwrap();
+    let hide = s.material_id("boarhide").unwrap();
+    let form = s.form_id("blade_straight_single_edge").unwrap();
+
+    // A boulder, given a hand and an intent.
+    let sword = s
+        .forms
+        .assemble(form, &[iron, iron, hide])
+        .map(|b| s.spawn(b, V3::ZERO))
+        .unwrap();
+    let rock = s.spawn_lump(granite, Fx::from_int(2), V3::new(Fx::from_int(-1), Fx::ZERO, Fx::ZERO));
+    s.ecs.effectors.insert(
+        rock,
+        Effectors {
+            strength: Fx::from_ratio(7, 2),
+            wielded: Some(sword),
+            recovery: Fx::ZERO,
+        },
+    );
+    s.ecs.agency.insert(rock, Agency::default());
+
+    assert!(
+        matches!(s.swing(rock), SwingOutcome::Hit { .. }),
+        "a boulder holding a sword could not swing it"
     );
 }

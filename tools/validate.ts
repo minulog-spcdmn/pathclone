@@ -195,6 +195,7 @@ const files: Array<[string, string]> = [
   ["data/materials.json", "data/schema/materials.schema.json"],
   ["data/forms.json", "data/schema/forms.schema.json"],
   ["data/rules.json", "data/schema/rules.schema.json"],
+  ["data/arena.json", "data/schema/arena.schema.json"],
 ];
 
 heading("schema validation (§12.5)");
@@ -260,6 +261,46 @@ for (const m of materials.materials) {
   // A solid that can never be deformed can never be worked, repaired or shaped.
   if (m.hardness > 0 && m.toughness <= 0) {
     problems.push(`${m.id}: solid with zero toughness fractures on contact with anything`);
+  }
+}
+
+// The arena names forms and materials that have to exist, and a prop is either
+// an assembly or a lump — never both, never neither.
+const arena = readJson<{
+  player: { form: string; materials: string[] };
+  rack: Array<{ label: string; form: string; materials: string[] }>;
+  props: Array<{ label: string; form?: string; materials?: string[]; material?: string }>;
+}>("data/arena.json");
+const formIds = new Set(forms.forms.map((f) => f.id));
+const slotCount = new Map(forms.forms.map((f) => [f.id, f.parts.length]));
+
+function checkAssembly(where: string, form: string, materials: string[]) {
+  if (!formIds.has(form)) {
+    problems.push(`${where}: unknown form "${form}"`);
+    return;
+  }
+  const slots = slotCount.get(form)!;
+  if (materials.length !== slots) {
+    problems.push(`${where}: form "${form}" has ${slots} slots but ${materials.length} materials`);
+  }
+  for (const m of materials) {
+    if (!ids.has(m)) problems.push(`${where}: unknown material "${m}"`);
+  }
+}
+
+checkAssembly("arena player", arena.player.form, arena.player.materials);
+for (const entry of arena.rack) {
+  checkAssembly(`rack "${entry.label}"`, entry.form, entry.materials);
+}
+for (const prop of arena.props) {
+  const where = `prop "${prop.label}"`;
+  if (prop.form) {
+    if (prop.material) problems.push(`${where}: has both a form and a material`);
+    checkAssembly(where, prop.form, prop.materials ?? []);
+  } else if (prop.material) {
+    if (!ids.has(prop.material)) problems.push(`${where}: unknown material "${prop.material}"`);
+  } else {
+    problems.push(`${where}: neither a form nor a material`);
   }
 }
 

@@ -1,45 +1,18 @@
-# pathclone
+# substrate
 
-Two projects share this repository.
-
-- **`sim/` + `data/` + `arena.html` — the substrate.** Milestones M0 and M1 of
-  the systemic sandbox ARPG specified in [`docs/DESIGN.md`](docs/DESIGN.md): a
-  deterministic fixed-point simulation core, a hand-authored material table, and
-  the impulse resolver that turns the two into gameplay. This is the newer work
-  and the rest of this file is about it.
-- **`src/` (everything outside `src/substrate/`) — Cinderfall.** A complete
-  browser ARPG in the Path of Exile 2 mould. It is unrelated to the substrate and
-  is summarised at the bottom.
-
----
-
-## The substrate
-
-`docs/DESIGN.md` specifies a game with **no content database** — no item list,
-no bestiary, no spell list. Every sword, creature and effect is meant to fall out
-of a material simulation meeting an impulse resolver. The document is a 16–20
-month plan for nine people, and it is unusually clear about what has to exist
-first:
-
-> **§4.4 ship gate:** before any content work begins, the team must be able to
-> demonstrate 20 distinct, useful, unanticipated tactical outcomes produced
-> solely by the material table and the impulse resolver in a bare test arena.
->
-> **§15 M1:** If this fails, stop and fix the material table. **Do not proceed.**
-
-So that is what is built here: M0 and M1, and the gate between M1 and everything
-else. Worldgen, crafting, abilities, ecology and multiplayer are **not** built —
-see [What is deliberately absent](#what-is-deliberately-absent).
-
-### Run it
+Milestones **M0** and **M1** of the systemic sandbox ARPG specified in
+[`docs/DESIGN.md`](docs/DESIGN.md): a deterministic simulation core, a
+hand-authored material table, the impulse resolver that turns the two into
+gameplay, and a small hand-made arena you can walk around in and hit things
+with.
 
 ```bash
 npm install
 npm run sim:build      # cargo -> wasm32, copied to public/sim.wasm
-npm run dev            # then open /arena.html
+npm run dev            # WASD, mouse aim, click to swing
 ```
 
-`npm run check` runs everything the design gates on, in order:
+`npm run check` runs everything the design gates on:
 
 ```
 data:validate   schemas and referential integrity (§12.5)
@@ -51,7 +24,26 @@ sim:test        native acceptance suite
 determinism     wasm32 vs x86-64, 10,000 ticks (§12.4 rule 6)
 ```
 
-### The one idea
+---
+
+## What this is
+
+`docs/DESIGN.md` specifies a game with **no content database** — no item list,
+no bestiary, no spell list. Every sword, creature and effect is meant to fall
+out of a material simulation meeting an impulse resolver. It is a 16–20 month
+plan for nine people, and it is unusually clear about what has to exist first:
+
+> **§4.4 ship gate:** before any content work begins, the team must be able to
+> demonstrate 20 distinct, useful, unanticipated tactical outcomes produced
+> solely by the material table and the impulse resolver in a bare test arena.
+>
+> **§15 M1:** If this fails, stop and fix the material table. **Do not proceed.**
+
+So that is what is built: M0, M1, and the gate between M1 and everything else.
+Worldgen, crafting, abilities, ecology and multiplayer are **not** built — see
+[What is deliberately absent](#what-is-deliberately-absent).
+
+## The one idea
 
 There is no damage type. §4.3 says to delete the enum, and it is deleted: a
 sword hit, a fall, a thrown flask, a lightning arc and standing near lava all
@@ -74,7 +66,56 @@ There is no material code — `sim/src/material.rs` contains no material names, 
 `match` on a material id, and no constant that means anything about a specific
 substance.
 
-### The gate
+## The arena
+
+`npm run dev` opens the §15 M1 slice: *"basic forms and melee, single-player,
+one small hand-made arena, Readout panel."*
+
+You are an entity with a `Body`, `Effectors`, `Locomotion` and `Agency`.
+Nothing marks you as the player — §4.1 forbids it — except that a keyboard
+writes your intent where a utility evaluator will write a wolf's at M4. There is
+no health bar, because there is no health: parts deform, fracture, melt, freeze,
+corrode and burn, and a Readout tells you which.
+
+| | |
+|---|---|
+| `WASD` | move — top speed falls with everything you carry |
+| mouse | aim; a swing only reaches what is in front of you |
+| click / `Space` | swing (hold to keep swinging) |
+| `1`–`9`, `Q`/`E` | change weapon |
+| shift-click | inspect a part with the Lens |
+| `R` | reset the arena |
+
+Six training dummies differ in exactly one thing: what their target slot is
+made of. Walk between them with the same weapon and the substrate teaches
+itself.
+
+- The **iron sword** cuts flesh apart in three or four blows and cannot mark
+  chitin or plate.
+- The **iron maul** barely bruises flesh, cannot dent a chitin plate, and
+  shatters it anyway — energy density past toughness, which is the only way
+  §4.3's promise can work, since a wide contact area is what keeps stress low.
+- The **obsidian sword** hits twice as hard as iron and explodes against
+  granite, because the blow comes back into it.
+- The **meteoric sword** does identical damage to iron and simply never breaks.
+  Two materials that both read as "very hard"; the difference is one visible
+  number.
+- The **iron spear** reaches 2.4 units and goes through steel plate, at the
+  point's risk.
+- The **lead maul** is heavier, slower and worse at everything, because
+  delivered energy peaks at an intermediate mass.
+
+The arena also holds a magma pool, an ice block, a water trough, a charged
+stormcrystal with copper posts beside it, pitchwood logs, a saltpetre pile, a
+chalkstone block and a heap of rime salt — every reagent the twenty ship-gate
+outcomes use, reachable on foot. Carry the quartz sword near the magma and it
+melts and then boils away, and you are unarmed. Nobody implemented that.
+
+The whole arena is `data/arena.json`: a player, a weapon rack and a list of
+props at coordinates. There is no level format, because in a game with no
+content database that is all a place can be.
+
+## The gate
 
 ```
 $ npm run gate
@@ -92,14 +133,13 @@ $ npm run gate
 
 The twenty live in `sim/src/scenarios.rs`. Each sets up a bare arena, does
 something, and checks a claim, reporting the numbers it saw. They run three ways
-from that one source — in CI via `tools/shipgate.ts`, natively via
-`cargo test`, and in the browser arena — so what a stakeholder watches is
-literally the thing the build checks.
+from that one source — in CI via `tools/shipgate.ts`, natively via `cargo test`,
+and from the panel at the bottom of the arena page — so what a stakeholder
+watches is literally the thing the build checks.
 
 What matters is the word *unanticipated*. Nothing in the crate implements
 freezing-then-shattering, chain lightning, fire spreading, armour softening in a
-fire, salt water as a weapon, or grinding an edge until the blade melts. Each is
-`materials.json` meeting `impulse.rs`:
+fire, salt water as a weapon, or grinding an edge until the blade melts:
 
 | Outcome | Where it actually comes from |
 |---|---|
@@ -116,10 +156,10 @@ fire, salt water as a weapon, or grinding an edge until the blade melts. Each is
 
 Two of the twenty are not tactical outcomes but invariants the design names
 explicitly: fragments of a shattered object are ordinary entities carrying their
-share of the heat, and a bomb, a fire, an arc chain and a hammer running together
-for 400 ticks never produce a joule that was not injected or released.
+share of the heat, and a bomb, a fire, an arc chain and a hammer running
+together for 400 ticks never produce a joule that was not injected or released.
 
-### Determinism
+## Determinism
 
 §12.4 makes bit-identical simulation a hard requirement and calls platform
 transcendentals "the single most common source of cross-platform desync". So the
@@ -141,7 +181,7 @@ hashes at ten checkpoints.
 Both hosts read the *same packed bytes*, not their own copy of the JSON: a
 determinism test where each host parses its own input is testing two parsers.
 
-### The fuzzer
+## The fuzzer
 
 §4.3 names energy-generating loops as "the #1 exploit vector in this design" and
 §13 asks for a fuzzer that hunts them. `npm run fuzz` does not sample for them —
@@ -158,7 +198,7 @@ It also reports the hardness/toughness correlation §4.2 expects to be negative
 (it is, at −0.19), names the deliberate anticorrelated outlier, and flags
 materials no player would ever pick.
 
-### The interaction matrix
+## The interaction matrix
 
 `npm run matrix` prints the §4.4 spreadsheet as behaviour, so tuning is "read the
 matrix, change a number, read it again" rather than "play for an hour and form an
@@ -175,59 +215,31 @@ impression".
 ```
 
 Every weapon has a niche readable off two material columns, and nobody balanced
-any of it. The iron sword is the dependable all-rounder; obsidian hits twice as
-hard and destroys itself against nine of thirteen targets; meteoric steel does
-identical damage to iron and simply never breaks; the spear defeats plate and
-snaps its point doing it; the maul does almost nothing to flesh and shatters
-everything brittle. A lead maul is strictly worse than an iron one, because
-delivered energy peaks at an intermediate mass — so the best blade material for a
-given wielder is a discovery rather than "pick the densest".
+any of it.
 
-### The arena
-
-`/arena.html` is §4.4's bare test arena and §15 M1's Readout panel.
-
-- Run any of the twenty outcomes, or all of them, and watch what happened.
-- Place materials, heat and chill and charge and douse them, swing weapons made
-  of anything at anything, and step or run the clock.
-- Every surface is coloured by §10.1's derivation: hue from class, roughness from
-  hardness, metallic from conductivity, emission from temperature, an arc rim
-  from charge, translucency from aether permeability, wear from integrity.
-  Nothing reads a material *name*, which is what will make generated materials
-  look coherent with no art pass.
-- The Readout prints what the resolver did in physical quantities — energy
-  absorbed, stress applied, thresholds crossed, volume converted. §10.3 is
-  emphatic that hiding the numbers is how this kind of game dies, so there is no
-  DPS number anywhere in the project.
-
-Rendering is 2D canvas on purpose: §15 M0 says "no rendering beyond debug
-primitives", §17 leaves the renderer undecided, and §12.1 requires that the
-choice stay reversible — which it only does while nothing above the substrate
-assumes one.
-
-### Layout
+## Layout
 
 ```
 docs/DESIGN.md          the specification this implements
 sim/                    the simulation crate — zero dependencies, no I/O
   src/fixed.rs          Q32.32 and in-crate transcendentals (§12.4)
   src/material.rs       L1, matter — data only, no material code (§4.2)
-  src/impulse.rs        L2, the seven-step resolver (§4.3)
+  src/impulse.rs        L2, the seven-step resolver, and melee (§4.3, §6.1)
   src/body.rs           L3, assemblies of parts (§4.1)
   src/form.rs           L3, forms and derived statistics (§6.1)
   src/ecs.rs            entities as component compositions (§4.1)
-  src/sim.rs            the tick: conduction, radiation, charge, phase
+  src/sim.rs            the tick: agency, locomotion, conduction, phase, charge
   src/scenarios.rs      the twenty ship-gate outcomes (§4.4)
   src/abi.rs            hand-written C ABI over wasm — no wasm-bindgen
   tests/acceptance.rs   the M0/M1 acceptance criteria as tests
-data/                   materials, forms, rules, and their JSON Schemas (§12.5)
-src/substrate/          the host: packer, wasm wrapper, appearance, arena
+data/                   materials, forms, rules, the arena, and their schemas
+src/substrate/          the host: packer, wasm wrapper, appearance, arena page
 tools/                  gate, fuzzer, determinism, matrix, validator, packer
 ```
 
-### Deviations from the specification
+## Deviations from the specification
 
-Four, each because the document asks for a consequence its stated rule cannot
+Five, each because the document asks for a consequence its stated rule cannot
 produce. They are marked in the code where they occur.
 
 1. **A fourth phase transition, `solidify`.** §4.2 lists `melt`, `boil` and
@@ -248,46 +260,33 @@ produce. They are marked in the code where they occur.
 4. **Radiant transfer between entities.** Conduction along an assembly graph
    cannot carry a fire from a burning tree to the wolf beside it, which §4.3
    promises. Symmetric, so it moves energy and never makes it.
+5. **A separation pass.** §3 lists rigid-body physics as a non-goal, and there
+   is none — but without something keeping two bodies out of each other, melee
+   reach cannot mean anything. Overlap is resolved without momentum, friction or
+   rotation, and only entities that can move are moved.
 
 `hoarfrost_quartz` also keeps every value from §4.2's worked example except its
 melt point: the document's −20 makes it a liquid at any habitable temperature,
 which is not what the surrounding prose describes.
 
-### What is deliberately absent
+## What is deliberately absent
 
 Everything above M1. There is no worldgen (§5), no crafting processes (§6.2), no
-ability graphs (§7), no creatures or ecology (§8), no claims, economy or
+ability graphs (§7), no creatures, ecology or AI (§8), no claims, economy or
 multiplayer (§9, §11), and no persistence (§5.3). §15 M1 forbids starting any of
-it until the gate passes, and the gate only passed a few commits ago.
+it until the gate passes.
 
-Two things exist as stubs so that later work is a change of consumer rather than
-a change of rule: `Rules::aether_density` carries §5.1's layer 5 without a field
+The melee layer is deliberately thin: reach, a facing arc, and a recovery
+derived from §6.1's swing rate. There is no combo system, no stamina, no
+attack animation state machine and no hit-location table — the part a blow lands
+on is drawn from the target's own volumes, and severing an arm matters because
+of what the arm was made of.
+
+Two things exist as stubs so later work is a change of consumer rather than a
+change of rule: `Rules::aether_density` carries §5.1's layer 5 without a field
 behind it yet, and `formation` blocks are validated in `materials.json` but not
 packed into the simulation.
 
 The design also asks for balance fuzzing over the ability graph space (§7.2) and
 the crafting space (§13). Neither exists to fuzz. The material fuzzer that does
 exist is built so those become additional passes rather than a new tool.
-
----
-
-## Cinderfall
-
-A browser action RPG built from scratch in TypeScript, mechanically inspired by
-Path of Exile 2: a real 3D perspective scene (Three.js), six classes with dual
-ascendancies, a large procedurally generated passive tree, gem-slots-on-the-skill
-itemization, full affix-driven equipment with a PoE-style currency system,
-resistances/armor/evasion/energy shield, status ailments, and a hub town with
-waypoint travel across three procedurally generated acts. All art is original
-procedural geometry.
-
-`npm run dev`, then open `/` rather than `/arena.html`.
-
-- `WASD` move (`Shift` sprint) · mouse aim · `LMB`/`MMB`/`RMB`/`Q`/`E`/`R`/`T`
-  skills · `1`/`2` flasks · `Space` dodge · `I` inventory · `P` passive tree ·
-  `C` character · `Esc` pause
-
-Note that Cinderfall is, by design, everything `docs/DESIGN.md` §3 lists as an
-anti-requirement — a class system, a skill tree, a named item list, an affix
-database. The two projects are not on a path to meet; they are in the same
-repository, not in the same game.

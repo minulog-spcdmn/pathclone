@@ -1,0 +1,188 @@
+{
+  "$comment": "DESIGN.md §15 M1: 'Single-player, one small hand-made arena.' Hand-made, and made of data — the arena is a list of forms and materials placed at coordinates, which is all a place can be in a game with no content database. Every dummy below is the same form; the only thing that differs is what its target slot is made of, and that is the entire lesson the arena teaches.",
+
+  "ambient_temp": 20,
+
+  "player": {
+    "$comment": "Not a player type. An entity with a Body, Effectors, Locomotion and Agency, exactly as §4.1 requires — the only thing that makes it the player is that a keyboard writes its Agency.",
+    "form": "body_bipedal",
+    "materials": ["flesh", "flesh", "flesh", "flesh", "flesh", "flesh", "boarhide"],
+    "at": [0, 0],
+    "strength": 3.5,
+    "locomotion": { "max_speed": 6.0, "accel": 34, "mass_ref": 12 }
+  },
+
+  "rack": [
+    {
+      "label": "iron sword",
+      "form": "blade_straight_single_edge",
+      "materials": ["cold_iron", "cold_iron", "boarhide"],
+      "note": "the dependable one — never breaks, never impresses"
+    },
+    {
+      "label": "obsidian sword",
+      "form": "blade_straight_single_edge",
+      "materials": ["obsidian", "cold_iron", "boarhide"],
+      "note": "hardness 8.50, toughness 0.04 — devastating, and it will not survive stone"
+    },
+    {
+      "label": "quartz sword",
+      "form": "blade_straight_single_edge",
+      "materials": ["hoarfrost_quartz", "cold_iron", "boarhide"],
+      "note": "light and vicious, and it melts at 45 degrees"
+    },
+    {
+      "label": "meteoric sword",
+      "form": "blade_straight_single_edge",
+      "materials": ["meteoric_steel", "cold_iron", "boarhide"],
+      "note": "hard AND tough — the anomaly of §5.4, and it simply never breaks"
+    },
+    {
+      "label": "iron dagger",
+      "form": "dagger_leaf",
+      "materials": ["cold_iron", "boarhide"],
+      "note": "tiny contact area, fast recovery, real work against metal"
+    },
+    {
+      "label": "iron spear",
+      "form": "spear_point_shaft",
+      "materials": ["cold_iron", "heartwood", "boarhide"],
+      "note": "reach 2.4 and enough stress to go through plate — at the point's risk"
+    },
+    {
+      "label": "iron axe",
+      "form": "axe_head_haft",
+      "materials": ["cold_iron", "heartwood", "boarhide"],
+      "note": "between the sword and the maul, and severs limbs"
+    },
+    {
+      "label": "iron maul",
+      "form": "maul_head_haft",
+      "materials": ["cold_iron", "heartwood", "boarhide"],
+      "note": "cannot dent chitin and shatters it anyway; barely bruises flesh"
+    },
+    {
+      "label": "lead maul",
+      "form": "maul_head_haft",
+      "materials": ["lead_grey", "heartwood", "boarhide"],
+      "note": "past the mass optimum: heavier, slower and worse in every way"
+    }
+  ],
+
+  "props": [
+    {
+      "label": "flesh dummy",
+      "form": "training_dummy",
+      "materials": ["flesh", "heartwood", "granite"],
+      "at": [5, -4]
+    },
+    {
+      "label": "chitin dummy",
+      "form": "training_dummy",
+      "materials": ["chitin", "heartwood", "granite"],
+      "at": [8, -1.5]
+    },
+    {
+      "label": "iron plate dummy",
+      "form": "training_dummy",
+      "materials": ["cold_iron", "heartwood", "granite"],
+      "at": [8, 1.5]
+    },
+    {
+      "label": "obsidian dummy",
+      "form": "training_dummy",
+      "materials": ["obsidian", "heartwood", "granite"],
+      "at": [5, 4]
+    },
+    {
+      "label": "spider silk dummy",
+      "form": "training_dummy",
+      "materials": ["spider_silk", "heartwood", "granite"],
+      "at": [2, 6]
+    },
+    {
+      "label": "bone dummy",
+      "form": "training_dummy",
+      "materials": ["bone", "heartwood", "granite"],
+      "at": [-2, 6]
+    },
+
+    {
+      "$comment": "A forge that is genuinely cooling. There is no fuel model at M1, so it will drop below 900 and freeze into basalt after a few minutes — which is the honest behaviour and worth watching.",
+      "label": "magma pool",
+      "material": "magma",
+      "volume": 6,
+      "at": [-6, -4],
+      "temp": 1400
+    },
+    {
+      "label": "ice block",
+      "material": "ice",
+      "volume": 6,
+      "at": [-6, 4],
+      "temp": -30
+    },
+    {
+      "label": "water trough",
+      "material": "water",
+      "volume": 3,
+      "at": [-3, 0],
+      "temp": 15
+    },
+    {
+      "label": "stormcrystal",
+      "material": "stormcrystal",
+      "volume": 2,
+      "at": [3, -7],
+      "charge": 22
+    },
+    {
+      "label": "copper post",
+      "material": "copper",
+      "volume": 1.5,
+      "at": [5, -7]
+    },
+    {
+      "label": "copper post",
+      "material": "copper",
+      "volume": 1.5,
+      "at": [7, -7]
+    },
+    {
+      "label": "saltpetre pile",
+      "material": "saltpetre",
+      "volume": 2,
+      "at": [-8, 0]
+    },
+    {
+      "label": "pitchwood log",
+      "material": "pitchwood",
+      "volume": 1.5,
+      "at": [-9, 2]
+    },
+    {
+      "label": "pitchwood log",
+      "material": "pitchwood",
+      "volume": 1.5,
+      "at": [-10.5, 2]
+    },
+    {
+      "label": "chalkstone block",
+      "material": "chalkstone",
+      "volume": 3,
+      "at": [-8, -2]
+    },
+    {
+      "label": "granite boulder",
+      "material": "granite",
+      "volume": 5,
+      "at": [1, -4]
+    },
+    {
+      "label": "rime salt heap",
+      "material": "rime_salt",
+      "volume": 4,
+      "at": [-3, -6]
+    }
+  ]
+}

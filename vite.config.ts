@@ -32,12 +32,7 @@ export default defineConfig({
   build: {
     target: "es2022",
     rollupOptions: {
-      input: {
-        // Cinderfall, the ARPG this repository already held.
-        main: resolve(import.meta.dirname, "index.html"),
-        // The substrate arena described in docs/DESIGN.md §4.4.
-        arena: resolve(import.meta.dirname, "arena.html"),
-      },
+      input: { arena: resolve(import.meta.dirname, "index.html") },
     },
   },
 });

@@ -20,6 +20,14 @@ pub struct FormPart {
     pub name_len: u32,
     /// Reference volume for this slot. Assemblies may override it.
     pub volume: Fx,
+    /// Where this part sits in the form's own frame, +x forward, +y right.
+    ///
+    /// The simulation never reads this — it has no opinion about where a hand
+    /// is relative to a torso. It is here because §6.1 says a form *is* its
+    /// geometry, and because a renderer that had to invent the layout would be
+    /// inventing content.
+    pub offset_x: Fx,
+    pub offset_y: Fx,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -165,6 +173,8 @@ impl FormTable {
                 name_off: r.u32()?,
                 name_len: r.u32()?,
                 volume: r.fx()?,
+                offset_x: r.fx()?,
+                offset_y: r.fx()?,
             });
         }
         let mut links = Vec::with_capacity(link_count);
@@ -231,6 +241,8 @@ pub struct StrikeProfile {
     pub contact_area: Fx,
     /// Swings per unit time — velocity over reach.
     pub rate: Fx,
+    /// How far the striking geometry can be brought to bear.
+    pub reach: Fx,
     /// Which part of the wielded body actually meets the target.
     pub strike_part: u16,
 }
@@ -282,6 +294,7 @@ pub fn derive_strike(
         kinetic,
         contact_area: edge_area.mul(wear).max(Fx::EPSILON),
         rate: velocity.div(reach.max(Fx::EPSILON)),
+        reach,
         strike_part,
     }
 }

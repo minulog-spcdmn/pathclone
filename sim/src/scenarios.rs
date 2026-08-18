@@ -108,6 +108,7 @@ fn wield(sim: &mut Sim, body: EntityId, weapon: EntityId) {
         Effectors {
             strength: r(7, 2),
             wielded: Some(weapon),
+            recovery: Fx::ZERO,
         },
     );
 }
@@ -1082,6 +1083,7 @@ pub fn soak(sim: &mut Sim, ticks: u32) {
             Effectors {
                 strength: r(7, 2),
                 wielded: Some(w),
+                recovery: Fx::ZERO,
             },
         );
         let mut resident: Vec<EntityId> = lumps.clone();

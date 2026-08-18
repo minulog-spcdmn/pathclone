@@ -273,7 +273,7 @@ export function packMaterials(doc: MaterialsDoc, index = indexMaterials(doc)): U
 
 export interface FormDoc {
   id: string;
-  parts: Array<{ id: string; volume: number }>;
+  parts: Array<{ id: string; volume: number; offset?: [number, number] }>;
   links: Array<[string, string]>;
   strike_part: string;
   edge_area: number;
@@ -320,7 +320,8 @@ export function packForms(doc: FormsDoc): Uint8Array {
       if (slotOf.has(p.id)) throw new Error(`${where}: duplicate part "${p.id}"`);
       slotOf.set(p.id, i);
       const pn = names.add(p.id);
-      parts.u32(pn.off).u32(pn.len).fx(p.volume);
+      const [ox, oy] = p.offset ?? [0, 0];
+      parts.u32(pn.off).u32(pn.len).fx(p.volume).fx(ox).fx(oy);
       partCount++;
     });
 
@@ -398,6 +399,7 @@ export const RULE_FIELDS = [
   "arc_heat_per_charge",
   "charge_energy_coeff",
   "flux_destabilise_k",
+  "swing_arc",
   "soften_k",
   "reaction_k",
 ] as const;

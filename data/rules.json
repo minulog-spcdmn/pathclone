@@ -24,6 +24,7 @@
   "arc_heat_per_charge": 2.0,
   "charge_energy_coeff": 2.0,
   "flux_destabilise_k": 0.10,
+  "swing_arc": 1.1,
 
   "soften_k": 0.90,
   "reaction_k": 1.0,

@@ -1,22 +1,25 @@
 /**
- * The bare test arena of DESIGN.md §4.4, and the §15 M1 deliverable that goes
- * with it: "Single-player, one small hand-made arena. Readout panel (§10.2)."
+ * The §15 M1 slice: "Basic forms and melee. Single-player, one small hand-made
+ * arena. Readout panel (§10.2)."
  *
- * Three things happen on this page, and all three are the design's own asks:
+ * You are an entity with a `Body`, `Effectors`, `Locomotion` and `Agency`.
+ * Nothing marks you as the player except that a keyboard writes your intent —
+ * §4.1 forbids anything else, and at M4 a utility evaluator will write the same
+ * struct for a wolf. You walk up to a dummy and hit it, and everything that
+ * follows is `data/materials.json` meeting `sim/src/impulse.rs`.
  *
- *   - the twenty §4.4 ship-gate outcomes can be run and watched, using the same
- *     code the CI gate runs, so what a stakeholder sees is what the build checks;
- *   - every surface is coloured by §10.1's property derivation, so a material's
- *     hardness, conductivity, permeability, heat and charge are legible before
- *     anyone opens a panel;
- *   - the §10.2 Readout prints what the resolver actually did, in physical
- *     quantities, because §10.3 is emphatic that hiding the numbers is how this
- *     kind of game dies.
+ * The three things on screen are all the design's own asks:
+ *
+ *   - §10.1's derivation colours every surface, so hardness, conductivity,
+ *     permeability, heat and charge are legible before you open a panel;
+ *   - §10.2's Readout prints what the resolver did, in physical quantities;
+ *   - §4.4's twenty ship-gate outcomes are one click away, running the same code
+ *     the CI gate runs.
  *
  * Rendering is 2D canvas on purpose. §15 M0 says "no rendering beyond debug
- * primitives", §17 leaves the renderer open until it is worth deciding, and
- * §12.1 requires that the choice stay reversible — which it only does while
- * nothing above the substrate assumes one.
+ * primitives", §17 leaves the renderer undecided, and §12.1 requires the choice
+ * stay reversible — which it only does while nothing above the substrate
+ * assumes one. Part positions come from the form's own geometry, not from here.
  */
 
 import "./arena.css";
@@ -24,8 +27,9 @@ import "./arena.css";
 import materialsDoc from "../../data/materials.json";
 import formsDoc from "../../data/forms.json";
 import rulesDoc from "../../data/rules.json";
+import arenaDoc from "../../data/arena.json";
 
-import { Substrate, type EntityView, type ReadoutEvent, type PartView } from "./host.ts";
+import { Substrate, type EntityView, type PartView, type ReadoutEvent } from "./host.ts";
 import { fillOf, readSurface, strokeOf, surfaceOf } from "./appearance.ts";
 import type { FormsDoc, MaterialsDoc, RulesDoc } from "./pack.ts";
 
@@ -46,11 +50,48 @@ try {
   });
 } catch (err) {
   root.innerHTML = `<div class="fatal"><h1>The simulation module is not built.</h1>
-    <p>The arena loads <code>public/sim.wasm</code>, which is produced from the Rust crate:</p>
+    <p>This page loads <code>public/sim.wasm</code>, produced from the Rust crate:</p>
     <code>npm run sim:build</code>
     <p>${String(err)}</p></div>`;
   throw err;
 }
+
+// ---------------------------------------------------------------------------
+// Arena description
+// ---------------------------------------------------------------------------
+
+interface RackEntry {
+  label: string;
+  form: string;
+  materials: string[];
+  note?: string;
+}
+
+interface PropEntry {
+  label: string;
+  form?: string;
+  materials?: string[];
+  material?: string;
+  volume?: number;
+  at: [number, number];
+  temp?: number;
+  charge?: number;
+}
+
+interface ArenaDoc {
+  ambient_temp: number;
+  player: {
+    form: string;
+    materials: string[];
+    at: [number, number];
+    strength: number;
+    locomotion: { max_speed: number; accel: number; mass_ref: number };
+  };
+  rack: RackEntry[];
+  props: PropEntry[];
+}
+
+const arena = arenaDoc as unknown as ArenaDoc;
 
 // ---------------------------------------------------------------------------
 // Layout
@@ -59,80 +100,29 @@ try {
 root.innerHTML = `
   <header class="bar">
     <h1>Substrate arena</h1>
-    <span class="spec">DESIGN.md §4.4 — materials × impulses, nothing else</span>
+    <span class="spec">DESIGN.md §15 M1 — basic forms and melee</span>
     <div class="stats">
       <span>tick <b id="s-tick">0</b></span>
       <span>entities <b id="s-entities">0</b></span>
-      <span>stored energy <b id="s-energy">0</b></span>
       <span>state <b id="s-hash">—</b></span>
     </div>
   </header>
 
   <main class="stage">
-    <canvas id="view"></canvas>
+    <canvas id="view" tabindex="0"></canvas>
     <div class="stage-overlay">
-      <span id="hint">click a part to inspect it · scroll to zoom</span>
+      <span id="hint">WASD move · mouse aim · click or space to swing · click a part to inspect · R resets</span>
       <span id="surface-legend"></span>
     </div>
   </main>
 
   <aside class="side">
     <section class="panel">
-      <h2>Ship gate <span>§4.4 — 20 outcomes</span></h2>
+      <h2>Loadout <span>§6.1 — derived, never stored</span></h2>
       <div class="panel-body">
-        <div class="row">
-          <select id="scenario" class="grow"></select>
-        </div>
-        <div class="row">
-          <button id="run-one">Run</button>
-          <button id="run-all">Run all 20</button>
-          <span id="tally" class="empty"></span>
-        </div>
-        <p class="claim" id="claim"></p>
-        <p class="note" id="note"></p>
-      </div>
-    </section>
-
-    <section class="panel">
-      <h2>Sandbox</h2>
-      <div class="panel-body">
-        <div class="row">
-          <label>material</label>
-          <select id="material" class="grow"></select>
-        </div>
-        <div class="row">
-          <label>volume</label>
-          <input id="volume" type="number" value="1" min="0.05" step="0.05" style="width:70px" />
-          <label>temp</label>
-          <input id="temp" type="number" value="20" step="10" style="width:70px" />
-          <button id="place">Place</button>
-        </div>
-        <div class="row">
-          <label>impulse</label>
-          <input id="magnitude" type="number" value="400" step="50" style="width:78px" />
-          <button id="heat">Heat</button>
-          <button id="chill">Chill</button>
-          <button id="charge">Charge</button>
-        </div>
-        <div class="row">
-          <label>reagent</label>
-          <select id="reagent" style="flex:1"></select>
-          <button id="douse">Apply</button>
-        </div>
-        <div class="row">
-          <label>weapon</label>
-          <select id="form" class="grow"></select>
-        </div>
-        <div class="row">
-          <label>made of</label>
-          <select id="weapon-material" class="grow"></select>
-          <button id="strike">Strike selection</button>
-        </div>
-        <div class="row">
-          <button id="tick">Step</button>
-          <button id="play">Run</button>
-          <button id="clear">Clear world</button>
-        </div>
+        <div class="rack" id="rack"></div>
+        <table class="props" id="weapon-stats"></table>
+        <p class="note" id="weapon-note"></p>
       </div>
     </section>
 
@@ -147,39 +137,82 @@ root.innerHTML = `
       <h2>Readout <span>§10.2 — what the resolver did</span></h2>
       <div class="readout" id="readout"></div>
     </section>
+
+    <section class="panel">
+      <h2>Ship gate <span>§4.4 — 20 outcomes</span></h2>
+      <div class="panel-body">
+        <div class="row">
+          <select id="scenario" class="grow"></select>
+        </div>
+        <div class="row">
+          <button id="run-one">Run</button>
+          <button id="run-all">Run all 20</button>
+          <button id="restore">Back to the arena</button>
+        </div>
+        <p class="claim" id="claim"></p>
+        <p class="note" id="note"></p>
+      </div>
+    </section>
   </aside>
 `;
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
-
 const canvas = $<HTMLCanvasElement>("view");
 const ctx = canvas.getContext("2d")!;
 
 // ---------------------------------------------------------------------------
-// Control population
+// World construction — everything below reads data/arena.json
 // ---------------------------------------------------------------------------
 
-const scenarios = sim.scenarios();
-$<HTMLSelectElement>("scenario").innerHTML = scenarios
-  .map((s) => `<option value="${s.index}">${s.index + 1}. ${s.name}</option>`)
-  .join("");
+let player = 0;
+let weapon: number | null = null;
+let equipped = 0;
+/** Labels for props, so the Readout can say "chitin dummy". */
+const labels = new Map<number, string>();
 
-const materialOptions = sim.materials.docs
-  .map((m, i) => `<option value="${i}">${m.id}</option>`)
-  .join("");
-$<HTMLSelectElement>("material").innerHTML = materialOptions;
-$<HTMLSelectElement>("weapon-material").innerHTML = materialOptions;
-$<HTMLSelectElement>("weapon-material").value = String(sim.materialId("cold_iron"));
+function buildArena() {
+  sim.reset();
+  labels.clear();
+  selection = null;
+  events = [];
+  lastEventTick = 0;
 
-$<HTMLSelectElement>("form").innerHTML = sim.forms.docs
-  .map((f, i) => `<option value="${i}">${f.id}</option>`)
-  .join("");
-$<HTMLSelectElement>("form").value = String(sim.formId("blade_straight_single_edge"));
+  const p = arena.player;
+  player = sim.assemble(p.form, p.materials, { x: p.at[0], y: p.at[1], z: 0 }, arena.ambient_temp);
+  labels.set(player, "you");
+  sim.setLocomotion(player, p.locomotion.max_speed, p.locomotion.accel, p.locomotion.mass_ref);
+  sim.setAgency(player, 0, 0, 0, false);
+  weapon = null;
+  equip(equipped);
 
-$<HTMLSelectElement>("reagent").innerHTML = [...sim.materials.tagBits.keys()]
-  .map((t) => `<option value="${t}">${t}</option>`)
-  .join("");
-$<HTMLSelectElement>("reagent").value = "acid";
+  for (const prop of arena.props) {
+    const at = { x: prop.at[0], y: prop.at[1], z: 0 };
+    const e =
+      prop.form && prop.materials
+        ? sim.assemble(prop.form, prop.materials, at, prop.temp ?? arena.ambient_temp)
+        : sim.spawnLump(prop.material!, prop.volume ?? 1, at, prop.temp ?? arena.ambient_temp);
+    labels.set(e, prop.label);
+    if (prop.charge) sim.setPartCharge(e, 0, prop.charge);
+  }
+  sim.step(1);
+}
+
+/**
+ * Put a weapon in the player's hand.
+ *
+ * The rack is data. Each entry is a form and one material per slot, and the
+ * difference between "iron sword" and "obsidian sword" is one string — which is
+ * the whole of §6.1's "there is no item database".
+ */
+function equip(index: number) {
+  equipped = ((index % arena.rack.length) + arena.rack.length) % arena.rack.length;
+  const entry = arena.rack[equipped];
+  if (weapon !== null) sim.despawn(weapon);
+  weapon = sim.assemble(entry.form, entry.materials, { x: -100, y: -100, z: 0 }, arena.ambient_temp);
+  labels.set(weapon, entry.label);
+  sim.setEffectors(player, arena.player.strength, weapon);
+  renderRack();
+}
 
 // ---------------------------------------------------------------------------
 // State
@@ -191,17 +224,20 @@ interface Selection {
 }
 
 let selection: Selection | null = null;
-let running = false;
-let lastEventTick = 0;
 let events: ReadoutEvent[] = [];
-// The view frames itself; the wheel multiplies that fit rather than replacing
-// it, so zooming never loses the world off-screen.
-let zoom = 26;
+let lastEventTick = 0;
 let zoomMul = 1;
-let wielder: number | null = null;
-let weapon: number | null = null;
+let zoom = 46;
+/** Set while a ship-gate scenario has replaced the arena. */
+let inScenario = false;
 
-/** Layout cache so clicks can hit-test exactly what was drawn. */
+const held = new Set<string>();
+let mouseWorld = { x: 1, y: 0 };
+let mouseDown = false;
+/** Ticks since the last connecting swing, for the arc animation. */
+let swingAge = 99;
+let swingHit = false;
+
 interface DrawnPart {
   entity: number;
   part: number;
@@ -213,57 +249,53 @@ interface DrawnPart {
 let drawn: DrawnPart[] = [];
 
 // ---------------------------------------------------------------------------
-// Simulation control
+// Simulation stepping
 // ---------------------------------------------------------------------------
 
 function collectEvents() {
   const fresh = sim.events(lastEventTick);
-  if (fresh.length) {
-    events = [...fresh.reverse(), ...events].slice(0, 400);
-  }
+  if (fresh.length) events = [...fresh.reverse(), ...events].slice(0, 400);
   lastEventTick = sim.tick;
 }
 
-function step(ticks = 1) {
-  sim.step(ticks);
-  collectEvents();
-}
+function stepWorld() {
+  if (!inScenario) {
+    // Intent first: §4.1's Agency is written once per tick, and the simulation
+    // decides what that becomes.
+    let dx = 0;
+    let dy = 0;
+    if (held.has("KeyW") || held.has("ArrowUp")) dy -= 1;
+    if (held.has("KeyS") || held.has("ArrowDown")) dy += 1;
+    if (held.has("KeyA") || held.has("ArrowLeft")) dx -= 1;
+    if (held.has("KeyD") || held.has("ArrowRight")) dx += 1;
 
-function resetWorld() {
-  sim.reset();
-  selection = null;
-  events = [];
-  lastEventTick = 0;
-  wielder = null;
-  weapon = null;
-}
-
-/** Lazily build something that can hold a weapon (§4.1: it is just components). */
-function ensureWielder(): number {
-  const formId = Number($<HTMLSelectElement>("form").value);
-  const materialId = Number($<HTMLSelectElement>("weapon-material").value);
-  const formDoc = sim.forms.docs[formId];
-  const materials = formDoc.parts.map((_, i) =>
-    // Blade and head take the chosen material; hafts and grips are wood and
-    // hide, because a solid-iron grip is a different (and worse) weapon.
-    i === 0 ? sim.materialName(materialId) : i === formDoc.parts.length - 1 ? "boarhide" : "heartwood",
-  );
-  if (weapon !== null) sim.despawn(weapon);
-  weapon = sim.assemble(formDoc.id, materials, { x: -6, y: -6, z: 0 });
-  if (wielder === null) {
-    wielder = sim.assemble(
-      "body_bipedal",
-      ["flesh", "flesh", "flesh", "flesh", "flesh", "flesh", "boarhide"],
-      { x: -8, y: -6, z: 0 },
-    );
+    const pos = playerPosition();
+    const facing = Math.atan2(mouseWorld.y - pos.y, mouseWorld.x - pos.x);
+    const wantStrike = mouseDown || held.has("Space");
+    sim.setAgency(player, dx, dy, facing, wantStrike);
   }
-  sim.setEffectors(wielder, 3.5, weapon);
-  return wielder;
+  sim.step(1);
+  collectEvents();
+
+  const swung = events.find((e) => e.kind === "swung" && e.tick >= sim.tick - 1);
+  if (swung) {
+    swingAge = 0;
+    swingHit = swung.detail === 1;
+  } else {
+    swingAge++;
+  }
+}
+
+function playerPosition(): { x: number; y: number } {
+  const t = snapshot?.entities.find((e) => e.id === player);
+  return t ? { x: t.position.x, y: t.position.y } : { x: 0, y: 0 };
 }
 
 // ---------------------------------------------------------------------------
 // Rendering
 // ---------------------------------------------------------------------------
+
+let snapshot: ReturnType<Substrate["snapshot"]> | null = null;
 
 function resize() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -272,85 +304,64 @@ function resize() {
   canvas.height = Math.max(1, Math.floor(rect.height * dpr));
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
-
 window.addEventListener("resize", resize);
 
-/** Parts have no position of their own; fan them around the entity. */
-function layout(entity: EntityView, cx: number, cy: number): DrawnPart[] {
-  const live = entity.parts.filter((p) => p.attached && p.volume > 0);
-  if (live.length === 0) return [];
+/**
+ * Lay a body out from its form's geometry.
+ *
+ * §6.1 calls a form "rules about shape", and the offsets in `forms.json` are
+ * that shape. The renderer rotates them by the entity's facing and does not
+ * invent anything: a form with no offsets stacks at the origin, which is
+ * correct for a boulder.
+ */
+function layout(entity: EntityView): DrawnPart[] {
+  const form = sim.forms.docs[entity.form];
+  const cos = Math.cos(entity.orientation);
+  const sin = Math.sin(entity.orientation);
   const out: DrawnPart[] = [];
-  if (live.length === 1) {
-    const p = live[0];
-    out.push({ entity: entity.id, part: p.slot, x: cx, y: cy, r: radiusOf(p), view: p });
-    return out;
-  }
-  const spread = zoom * 0.42;
-  live.forEach((p, i) => {
-    const a = (i / live.length) * Math.PI * 2 - Math.PI / 2;
+  for (const p of entity.parts) {
+    if (!p.attached || p.volume <= 0) continue;
+    const offset = form?.parts[p.slot]?.offset ?? [0, 0];
+    // A loose fragment has no form; fan it slightly so a pile is countable.
+    const ox = form ? offset[0] : 0;
+    const oy = form ? offset[1] : 0;
     out.push({
       entity: entity.id,
       part: p.slot,
-      x: cx + Math.cos(a) * spread,
-      y: cy + Math.sin(a) * spread,
-      r: radiusOf(p),
+      x: entity.position.x + ox * cos - oy * sin,
+      y: entity.position.y + ox * sin + oy * cos,
+      r: Math.max(0.06, Math.cbrt(Math.max(p.volume, 0.001)) * 0.34),
       view: p,
     });
-  });
+  }
   return out;
 }
 
-function radiusOf(p: PartView): number {
-  return Math.max(3, Math.cbrt(Math.max(p.volume, 0.001)) * zoom * 0.38);
-}
-
 function draw() {
-  const snapshot = sim.snapshot();
+  snapshot = sim.snapshot();
   const w = canvas.clientWidth;
   const h = canvas.clientHeight;
   ctx.clearRect(0, 0, w, h);
 
-  // Fit the world, so the view never has to be driven manually.
-  let minX = Infinity,
-    maxX = -Infinity,
-    minY = Infinity,
-    maxY = -Infinity;
-  for (const e of snapshot.entities) {
-    minX = Math.min(minX, e.position.x);
-    maxX = Math.max(maxX, e.position.x);
-    minY = Math.min(minY, e.position.y);
-    maxY = Math.max(maxY, e.position.y);
-  }
-  if (!Number.isFinite(minX)) {
-    minX = maxX = minY = maxY = 0;
-  }
-  const cx = (minX + maxX) / 2;
-  const cy = (minY + maxY) / 2;
-
-  // Fit the extent, with room for the part fan and the labels beneath it.
-  const margin = 3;
-  const spanX = Math.max(maxX - minX, 0.001) + margin * 2;
-  const spanY = Math.max(maxY - minY, 0.001) + margin * 2;
-  const fit = Math.min(w / spanX, h / spanY);
-  zoom = Math.max(7, Math.min(110, fit * zoomMul));
-
+  zoom = 46 * zoomMul;
+  const focus = inScenario ? centreOfWorld() : playerPosition();
   const toScreen = (x: number, y: number): [number, number] => [
-    w / 2 + (x - cx) * zoom,
-    h / 2 + (y - cy) * zoom,
+    w / 2 + (x - focus.x) * zoom,
+    h / 2 + (y - focus.y) * zoom,
   ];
 
-  // Ground grid, so scale is visible.
+  // Ground grid: one line per world unit, so distance is readable and the
+  // camera's motion is visible.
   ctx.strokeStyle = "rgba(255,255,255,0.035)";
   ctx.lineWidth = 1;
-  const gridStep = zoom;
-  const [ox, oy] = toScreen(Math.floor(minX) - 2, Math.floor(minY) - 2);
-  for (let x = ox % gridStep; x < w; x += gridStep) {
+  const [ox, oy] = toScreen(Math.floor(focus.x), Math.floor(focus.y));
+  for (let x = ox % zoom; x < w; x += zoom) {
     ctx.beginPath();
     ctx.moveTo(x, 0);
     ctx.lineTo(x, h);
     ctx.stroke();
   }
-  for (let y = oy % gridStep; y < h; y += gridStep) {
+  for (let y = oy % zoom; y < h; y += zoom) {
     ctx.beginPath();
     ctx.moveTo(0, y);
     ctx.lineTo(w, y);
@@ -359,65 +370,81 @@ function draw() {
 
   drawn = [];
   for (const e of snapshot.entities) {
-    const [sx, sy] = toScreen(e.position.x, e.position.y);
-    drawn.push(...layout(e, sx, sy));
+    if (e.id === weapon) continue; // drawn in the player's hand instead
+    drawn.push(...layout(e));
   }
+  if (weapon !== null && !inScenario) drawn.push(...heldWeapon());
 
-  // Assembly links first, so parts sit on top of them.
-  ctx.strokeStyle = "rgba(255,255,255,0.10)";
-  ctx.lineWidth = 1.5;
-  for (const e of snapshot.entities) {
-    const parts = drawn.filter((d) => d.entity === e.id);
-    if (parts.length < 2) continue;
-    for (let i = 1; i < parts.length; i++) {
+  const screen = drawn.map((d) => {
+    const [sx, sy] = toScreen(d.x, d.y);
+    return { ...d, x: sx, y: sy, r: Math.max(3, d.r * zoom) };
+  });
+
+  // A ring under whichever entity the keyboard is driving. This is a camera
+  // concern, not a simulation one — nothing in the substrate knows the player
+  // exists, and the ring is drawn from the host's own notion of who it is driving.
+  if (!inScenario) {
+    const you = snapshot.entities.find((e) => e.id === player);
+    if (you) {
+      const [px, py] = toScreen(you.position.x, you.position.y);
+      const r = 0.95 * zoom;
+      ctx.strokeStyle = "rgba(111,179,255,0.28)";
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.moveTo(parts[0].x, parts[0].y);
-      ctx.lineTo(parts[i].x, parts[i].y);
+      ctx.arc(px, py, r, 0, Math.PI * 2);
+      ctx.stroke();
+      // A short spur showing which way the swing will go.
+      ctx.strokeStyle = "rgba(111,179,255,0.5)";
+      ctx.beginPath();
+      ctx.moveTo(px + Math.cos(you.orientation) * r, py + Math.sin(you.orientation) * r);
+      ctx.lineTo(
+        px + Math.cos(you.orientation) * (r + 10),
+        py + Math.sin(you.orientation) * (r + 10),
+      );
       ctx.stroke();
     }
   }
 
-  const surfaces = new Map<DrawnPart, ReturnType<typeof surfaceOf>>();
-  for (const d of drawn) {
-    const doc = sim.materials.docs[d.view.material];
-    if (!doc) continue;
-    surfaces.set(
-      d,
-      surfaceOf(doc, {
-        temperature: d.view.temperature,
-        charge: d.view.charge,
-        integrity: d.view.integrity,
-      }),
-    );
-  }
+  drawSwingArc(toScreen);
 
-  // Glows first, all of them, so a hot part cannot wash out the silhouette of
-  // whatever is drawn after it. This is the §10.1 emissive channel, cheaply.
-  for (const [d, surface] of surfaces) {
-    if (surface.emissive.intensity <= 0.02) continue;
-    const reach = d.r * 2.6;
-    const glow = ctx.createRadialGradient(d.x, d.y, d.r * 0.5, d.x, d.y, reach);
+  const surfaces = screen.map((d) => ({
+    d,
+    surface: (() => {
+      const doc = sim.materials.docs[d.view.material];
+      return doc
+        ? surfaceOf(doc, {
+            temperature: d.view.temperature,
+            charge: d.view.charge,
+            integrity: d.view.integrity,
+          })
+        : null;
+    })(),
+  }));
+
+  // Glows first so a hot object cannot wash out the silhouette drawn after it.
+  for (const { d, surface } of surfaces) {
+    if (!surface || surface.emissive.intensity <= 0.02) continue;
+    const reach = d.r * 2.8;
+    const g = ctx.createRadialGradient(d.x, d.y, d.r * 0.5, d.x, d.y, reach);
     const e = surface.emissive;
     const rgb = `${Math.round(e.r * 255)},${Math.round(e.g * 255)},${Math.round(e.b * 255)}`;
-    glow.addColorStop(0, `rgba(${rgb},${(e.intensity * 0.42).toFixed(3)})`);
-    glow.addColorStop(1, `rgba(${rgb},0)`);
-    ctx.fillStyle = glow;
+    g.addColorStop(0, `rgba(${rgb},${(e.intensity * 0.42).toFixed(3)})`);
+    g.addColorStop(1, `rgba(${rgb},0)`);
+    ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(d.x, d.y, reach, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  for (const [d, surface] of surfaces) {
+  for (const { d, surface } of surfaces) {
+    if (!surface) continue;
     ctx.fillStyle = fillOf(surface);
     ctx.beginPath();
     ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
     ctx.fill();
-
     ctx.strokeStyle = strokeOf(surface);
     ctx.lineWidth = surface.arc > 0.05 ? 1 + surface.arc * 2.5 : 1;
     ctx.stroke();
-
-    // Wear reads as a bite out of the outline.
     if (surface.wear > 0.05) {
       ctx.strokeStyle = `rgba(0,0,0,${(surface.wear * 0.6).toFixed(3)})`;
       ctx.lineWidth = 2;
@@ -425,7 +452,6 @@ function draw() {
       ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2 * surface.wear);
       ctx.stroke();
     }
-
     if (selection && selection.entity === d.entity && selection.part === d.part) {
       ctx.strokeStyle = "#6fb3ff";
       ctx.lineWidth = 1.5;
@@ -435,49 +461,177 @@ function draw() {
     }
   }
 
-  // Label the larger parts once there is room.
-  if (zoom > 14) {
-    ctx.font = "10px ui-monospace, monospace";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    const placed: Array<{ x: number; y: number; w: number }> = [];
-    // Biggest first: when labels would collide, the larger object keeps its name.
-    for (const d of [...drawn].sort((a, b) => b.r - a.r)) {
-      if (d.r < 7) continue;
-      const label = d.view.materialName;
-      const width = ctx.measureText(label).width;
-      const x = d.x;
-      const y = d.y + d.r + 10;
-      if (placed.some((p) => Math.abs(p.y - y) < 11 && Math.abs(p.x - x) < (p.w + width) / 2 + 4)) {
-        continue;
-      }
-      placed.push({ x, y, w: width });
-      ctx.fillStyle = "rgba(11,13,16,0.75)";
-      ctx.fillRect(x - width / 2 - 2, y - 6, width + 4, 12);
-      ctx.fillStyle = "rgba(215,222,231,0.72)";
-      ctx.fillText(label, x, y);
+  drawLabels(screen, toScreen);
+  drawn = screen;
+}
+
+/** Position the wielded weapon in the hand, swinging through its arc. */
+function heldWeapon(): DrawnPart[] {
+  const view = snapshot?.entities.find((e) => e.id === weapon);
+  const you = snapshot?.entities.find((e) => e.id === player);
+  if (!view || !you) return [];
+  // Recovery drives the animation, so what you see is the cooldown the
+  // simulation is actually enforcing.
+  const recovery = sim.recoveryOf(player);
+  const swing = swingAge < 6 ? Math.sin((1 - swingAge / 6) * Math.PI) : 0;
+  const sweep = (swing * (swingHit ? 1 : 0.7) - 0.35) * rulesDoc.swing_arc;
+  const angle = you.orientation + sweep;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const grip = 0.42 + swing * 0.25 - Math.min(recovery, 0.4) * 0.2;
+  const form = sim.forms.docs[view.form];
+  const out: DrawnPart[] = [];
+  for (const p of view.parts) {
+    if (!p.attached || p.volume <= 0) continue;
+    const [px, py] = form?.parts[p.slot]?.offset ?? [0, 0];
+    const lx = px + grip;
+    out.push({
+      entity: view.id,
+      part: p.slot,
+      x: you.position.x + lx * cos - py * sin,
+      y: you.position.y + lx * sin + py * cos,
+      r: Math.max(0.05, Math.cbrt(Math.max(p.volume, 0.001)) * 0.3),
+      view: p,
+    });
+  }
+  return out;
+}
+
+function drawSwingArc(toScreen: (x: number, y: number) => [number, number]) {
+  if (inScenario || swingAge >= 6) return;
+  const you = snapshot?.entities.find((e) => e.id === player);
+  if (!you) return;
+  const reach = sim.reachOf(player);
+  const [cx, cy] = toScreen(you.position.x, you.position.y);
+  const fade = 1 - swingAge / 6;
+  ctx.strokeStyle = swingHit
+    ? `rgba(255,168,110,${(fade * 0.5).toFixed(3)})`
+    : `rgba(140,160,185,${(fade * 0.22).toFixed(3)})`;
+  ctx.lineWidth = 2 + fade * 3;
+  ctx.beginPath();
+  ctx.arc(
+    cx,
+    cy,
+    reach * zoom,
+    you.orientation - rulesDoc.swing_arc,
+    you.orientation + rulesDoc.swing_arc,
+  );
+  ctx.stroke();
+}
+
+function drawLabels(
+  screen: DrawnPart[],
+  toScreen: (x: number, y: number) => [number, number],
+) {
+  ctx.font = "10px ui-monospace, monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  // Prop names sit above the object; part materials only appear on the one
+  // being inspected, or the page turns into a wall of text.
+  for (const e of snapshot?.entities ?? []) {
+    const label = labels.get(e.id);
+    if (!label || e.id === weapon) continue;
+    const [sx, sy] = toScreen(e.position.x, e.position.y);
+    if (sx < -80 || sy < -40 || sx > canvas.clientWidth + 80 || sy > canvas.clientHeight + 40) {
+      continue;
+    }
+    const width = ctx.measureText(label).width;
+    ctx.fillStyle = "rgba(11,13,16,0.72)";
+    ctx.fillRect(sx - width / 2 - 3, sy - 34, width + 6, 13);
+    ctx.fillStyle = e.id === player ? "rgba(111,179,255,0.9)" : "rgba(215,222,231,0.62)";
+    ctx.fillText(label, sx, sy - 27);
+  }
+
+  if (selection) {
+    const d = screen.find((s) => s.entity === selection!.entity && s.part === selection!.part);
+    if (d) {
+      const text = d.view.materialName;
+      const width = ctx.measureText(text).width;
+      ctx.fillStyle = "rgba(11,13,16,0.8)";
+      ctx.fillRect(d.x - width / 2 - 3, d.y + d.r + 4, width + 6, 13);
+      ctx.fillStyle = "rgba(111,179,255,0.95)";
+      ctx.fillText(text, d.x, d.y + d.r + 11);
     }
   }
+}
+
+function centreOfWorld(): { x: number; y: number } {
+  const es = snapshot?.entities ?? [];
+  if (!es.length) return { x: 0, y: 0 };
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const e of es) {
+    minX = Math.min(minX, e.position.x);
+    maxX = Math.max(maxX, e.position.x);
+    minY = Math.min(minY, e.position.y);
+    maxY = Math.max(maxY, e.position.y);
+  }
+  return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
 }
 
 // ---------------------------------------------------------------------------
 // Panels
 // ---------------------------------------------------------------------------
 
-const fmt = (v: number, places = 2) =>
-  Math.abs(v) >= 1000 ? v.toFixed(0) : v.toFixed(places);
+const fmt = (v: number, places = 2) => (Math.abs(v) >= 1000 ? v.toFixed(0) : v.toFixed(places));
 
 function renderStats() {
   $("s-tick").textContent = String(sim.tick);
   $("s-entities").textContent = String(sim.entityCount);
-  $("s-energy").textContent = fmt(sim.storedEnergy(), 1);
   $("s-hash").textContent = sim.hash().toString(16).padStart(16, "0").slice(0, 12);
+}
+
+function renderRack() {
+  $("rack").innerHTML = arena.rack
+    .map(
+      (entry, i) =>
+        `<button class="slot ${i === equipped ? "on" : ""}" data-slot="${i}">
+           <b>${i + 1}</b> ${entry.label}
+         </button>`,
+    )
+    .join("");
+  renderWeaponStats();
+}
+
+/**
+ * §6.1: "All statistics are derived, none are stored."
+ *
+ * Every number below is computed from the form's geometry and the materials in
+ * its slots, at the moment it is displayed. §10.3 forbids a DPS number or a
+ * power score, so there is not one — just the physics the player can reason
+ * from.
+ */
+function renderWeaponStats() {
+  const entry = arena.rack[equipped];
+  const form = sim.forms.docs[sim.formId(entry.form)];
+  const mass = entry.materials.reduce((sum, m, i) => {
+    const doc = sim.materials.docs[sim.materialId(m)];
+    return sum + doc.density * (form.parts[i]?.volume ?? 0);
+  }, 0);
+  const velocity = Math.min(form.max_speed, (arena.player.strength * form.leverage) / mass);
+  const kinetic = 0.5 * mass * velocity * velocity;
+  const blade = sim.materials.docs[sim.materialId(entry.materials[0])];
+
+  $("weapon-stats").innerHTML = `
+    <tr><td>mass</td><td>${fmt(mass)}</td></tr>
+    <tr><td>swing velocity</td><td>${fmt(velocity)}</td></tr>
+    <tr><td>energy per hit</td><td>${fmt(kinetic)}</td></tr>
+    <tr><td>contact area</td><td>${fmt(form.edge_area, 3)}</td></tr>
+    <tr><td>reach</td><td>${fmt(form.reach)}</td></tr>
+    <tr><td>swings / second</td><td>${fmt(velocity / form.reach)}</td></tr>
+    <tr><td>head hardness</td><td>${fmt(blade.hardness)}</td></tr>
+    <tr><td>head toughness</td><td>${fmt(blade.toughness)}</td></tr>
+  `;
+  $("weapon-note").textContent = entry.note ?? "";
 }
 
 function renderLens() {
   const host = $("lens");
   if (!selection) {
-    host.innerHTML = `<p class="empty">Nothing selected. Click a part in the arena.</p>`;
+    host.innerHTML = `<p class="empty">Click any part in the arena to read its properties.</p>`;
     $("surface-legend").textContent = "";
     return;
   }
@@ -509,31 +663,22 @@ function renderLens() {
         `<tr><td>${t}</td><td>${fmt(doc.phase_points![t]!, 0)} → ${doc.phase_products?.[t] ?? "—"}</td></tr>`,
     )
     .join("");
-
   const reactionRows = (doc.reactions ?? [])
     .map(
       (rx) =>
-        `<tr><td>${rx.with}</td><td>${rx.produces} ${
-          rx.releases?.thermal ? `(${rx.releases.thermal > 0 ? "+" : ""}${rx.releases.thermal})` : ""
+        `<tr><td>${rx.with}</td><td>${rx.produces}${
+          rx.releases?.thermal ? ` (${rx.releases.thermal > 0 ? "+" : ""}${rx.releases.thermal})` : ""
         }</td></tr>`,
     )
     .join("");
 
-  // §10.3: display physical properties, never a derived power score.
   host.innerHTML = `
     <table class="props">
       <tr><td>material</td><td><b>${doc.id}</b></td></tr>
-      <tr><td>entity·part</td><td>${entity}·${part}</td></tr>
+      <tr><td>where</td><td>${labels.get(entity) ?? `entity ${entity}`} · part ${part}</td></tr>
       <tr><td>temperature</td><td>${fmt(temperature, 1)}</td></tr>
-      ${
-        target
-          ? `<tr><td>${target}ing</td><td>${fmt(Math.abs(progress), 1)} banked</td></tr>`
-          : ""
-      }
-      <tr><td>charge</td><td>${fmt(charge, 2)} / ${fmt(doc.discharge_threshold, 2)}${bar(
-        charge,
-        doc.discharge_threshold,
-      )}</td></tr>
+      ${target ? `<tr><td>${target}ing</td><td>${fmt(Math.abs(progress), 1)} banked</td></tr>` : ""}
+      <tr><td>charge</td><td>${fmt(charge, 2)} / ${fmt(doc.discharge_threshold, 2)}${bar(charge, doc.discharge_threshold)}</td></tr>
       <tr><td>integrity</td><td>${fmt(integrity, 3)}${bar(integrity, 1)}</td></tr>
       <tr><td>volume</td><td>${fmt(volume, 3)}</td></tr>
     </table>
@@ -548,7 +693,6 @@ function renderLens() {
       <tr><td>thermal cond.</td><td>${fmt(doc.thermal_conductivity)}</td></tr>
       <tr><td>conductivity</td><td>${fmt(doc.conductivity)}</td></tr>
       <tr><td>permeability</td><td>${fmt(doc.aether_permeability)}</td></tr>
-      <tr><td>aether cap.</td><td>${fmt(doc.aether_capacity)}</td></tr>
       <tr><td>corrosion res.</td><td>${fmt(doc.corrosion_resistance)}</td></tr>
     </table>
     ${phaseRows ? `<div class="legend">phase points</div><table class="props">${phaseRows}</table>` : ""}
@@ -556,18 +700,26 @@ function renderLens() {
   `;
 }
 
+function where(e: ReadoutEvent): string {
+  return labels.get(e.entity) ?? `entity ${e.entity}`;
+}
+
 function describe(e: ReadoutEvent): string {
   const before = sim.materialName(e.materialBefore);
   const after = sim.materialName(e.materialAfter);
   switch (e.kind) {
+    case "swung":
+      return e.detail
+        ? `${fmt(e.a)} of energy into ${after}`
+        : `nothing within ${fmt(e.b)} reach`;
     case "impact":
-      return `${before} absorbed ${fmt(e.a)} at ${fmt(e.b)} stress`;
+      return `${where(e)}: ${before} absorbed ${fmt(e.a)} at ${fmt(e.b)} stress`;
     case "deformed":
-      return `${before} lost ${fmt(e.a, 3)} integrity (stress ${fmt(e.b)})`;
+      return `${where(e)}: ${before} lost ${fmt(e.a, 3)} integrity (stress ${fmt(e.b)})`;
     case "fractured":
-      return `${before} broke into ${e.detail} — ${fmt(e.a)} past a threshold of ${fmt(e.b)}`;
+      return `${where(e)}: ${before} broke into ${e.detail} — ${fmt(e.a)} past a threshold of ${fmt(e.b)}`;
     case "phase":
-      return `${before} → ${after} crossing ${fmt(e.b, 0)} at ${fmt(e.a, 0)}`;
+      return `${where(e)}: ${before} → ${after} crossing ${fmt(e.b, 0)} at ${fmt(e.a, 0)}`;
     case "reacted":
       return `${fmt(e.a, 3)} of ${before} → ${after}, ${e.b >= 0 ? "releasing" : "absorbing"} ${fmt(Math.abs(e.b))}`;
     case "discharged":
@@ -575,7 +727,7 @@ function describe(e: ReadoutEvent): string {
         ? `${fmt(e.a)} arced away past a threshold of ${fmt(e.b)}`
         : `${fmt(e.a)} had nowhere to go and became heat`;
     case "destroyed":
-      return `${before} is gone (${fmt(e.a, 3)} volume)`;
+      return `${where(e)}: ${before} is gone (${fmt(e.a, 3)} volume)`;
     case "spawned":
       return `${fmt(e.a, 3)} of ${before} became its own object`;
     default:
@@ -586,11 +738,11 @@ function describe(e: ReadoutEvent): string {
 function renderReadout() {
   const host = $("readout");
   if (events.length === 0) {
-    host.innerHTML = `<div class="panel-body"><p class="empty">Nothing has happened yet. §10.2: this panel is the hypothesis-testing loop — every line is a physical quantity the resolver produced, never a damage number.</p></div>`;
+    host.innerHTML = `<div class="panel-body"><p class="empty">Nothing has happened yet. Walk up to a dummy and swing — every line here is a physical quantity the resolver produced, never a damage number (§10.3).</p></div>`;
     return;
   }
   host.innerHTML = events
-    .slice(0, 120)
+    .slice(0, 90)
     .map(
       (e) =>
         `<div class="ev ${e.kind}"><span class="t">${e.tick}</span><span class="k">${e.kind}</span><span class="d">${describe(e)}</span></div>`,
@@ -599,13 +751,46 @@ function renderReadout() {
 }
 
 // ---------------------------------------------------------------------------
-// Interaction
+// Input
 // ---------------------------------------------------------------------------
 
-canvas.addEventListener("click", (ev) => {
+function screenToWorld(clientX: number, clientY: number): { x: number; y: number } {
+  const rect = canvas.getBoundingClientRect();
+  const focus = inScenario ? centreOfWorld() : playerPosition();
+  return {
+    x: focus.x + (clientX - rect.left - rect.width / 2) / zoom,
+    y: focus.y + (clientY - rect.top - rect.height / 2) / zoom,
+  };
+}
+
+canvas.addEventListener("mousemove", (ev) => {
+  mouseWorld = screenToWorld(ev.clientX, ev.clientY);
+});
+
+canvas.addEventListener("mousedown", (ev) => {
+  canvas.focus();
+  // Shift-click inspects instead of swinging, and so does any click in the
+  // scenario view where there is no player to swing.
   const rect = canvas.getBoundingClientRect();
   const x = ev.clientX - rect.left;
   const y = ev.clientY - rect.top;
+  if (ev.shiftKey || inScenario || ev.button === 2) {
+    pick(x, y);
+    return;
+  }
+  // A click that lands on a part both swings and selects, which is what makes
+  // the Lens useful while fighting.
+  pick(x, y);
+  mouseDown = true;
+});
+
+window.addEventListener("mouseup", () => {
+  mouseDown = false;
+});
+
+canvas.addEventListener("contextmenu", (ev) => ev.preventDefault());
+
+function pick(x: number, y: number) {
   let best: DrawnPart | null = null;
   let bestDist = Infinity;
   for (const d of drawn) {
@@ -615,85 +800,68 @@ canvas.addEventListener("click", (ev) => {
       bestDist = dist;
     }
   }
-  selection = best ? { entity: best.entity, part: best.part } : null;
-  renderLens();
-});
+  if (best) {
+    selection = { entity: best.entity, part: best.part };
+    renderLens();
+  }
+}
 
 canvas.addEventListener(
   "wheel",
   (ev) => {
     ev.preventDefault();
-    zoomMul = Math.max(0.25, Math.min(8, zoomMul * (ev.deltaY < 0 ? 1.12 : 0.89)));
+    zoomMul = Math.max(0.35, Math.min(3, zoomMul * (ev.deltaY < 0 ? 1.1 : 0.91)));
   },
   { passive: false },
 );
 
-function withSelection(fn: (entity: number, part: number) => void) {
-  if (!selection) {
-    $("hint").textContent = "select a part first — click one in the arena";
-    return;
+window.addEventListener("keydown", (ev) => {
+  if (ev.target instanceof HTMLSelectElement) return;
+  held.add(ev.code);
+  if (ev.code === "Space") ev.preventDefault();
+  if (ev.code === "KeyR") {
+    inScenario = false;
+    buildArena();
+    $("claim").textContent = "";
+    $("note").textContent = "";
   }
-  fn(selection.entity, selection.part);
-  step(1);
-}
-
-$("place").addEventListener("click", () => {
-  const material = Number($<HTMLSelectElement>("material").value);
-  const volume = Number($<HTMLInputElement>("volume").value) || 1;
-  const temp = Number($<HTMLInputElement>("temp").value) || 20;
-  // Spread new lumps along a line so they are within radiant range of each
-  // other — which is how fire spreading becomes visible without staging it.
-  const n = sim.entityCount;
-  sim.spawnLump(material, volume, { x: (n % 8) * 1.6 - 5, y: Math.floor(n / 8) * 1.6, z: 0 }, temp);
-  step(1);
+  if (ev.code === "KeyQ") equip(equipped - 1);
+  if (ev.code === "KeyE") equip(equipped + 1);
+  const digit = ev.code.match(/^Digit([1-9])$/);
+  if (digit) equip(Number(digit[1]) - 1);
+});
+window.addEventListener("keyup", (ev) => held.delete(ev.code));
+window.addEventListener("blur", () => {
+  held.clear();
+  mouseDown = false;
 });
 
-$("heat").addEventListener("click", () =>
-  withSelection((e, p) => sim.inject(e, p, { thermal: Number($<HTMLInputElement>("magnitude").value) })),
-);
-$("chill").addEventListener("click", () =>
-  withSelection((e, p) => sim.inject(e, p, { thermal: -Number($<HTMLInputElement>("magnitude").value) })),
-);
-$("charge").addEventListener("click", () =>
-  withSelection((e, p) =>
-    sim.inject(e, p, { charge: Math.abs(Number($<HTMLInputElement>("magnitude").value)) / 10 }),
-  ),
-);
-$("douse").addEventListener("click", () =>
-  withSelection((e, p) =>
-    sim.inject(e, p, { corrosive: 3, reagent: [$<HTMLSelectElement>("reagent").value] }),
-  ),
-);
-
-$("strike").addEventListener("click", () => {
-  if (!selection) {
-    $("hint").textContent = "select a target first — click a part in the arena";
-    return;
+$("rack").addEventListener("click", (ev) => {
+  const slot = (ev.target as HTMLElement).closest<HTMLElement>("[data-slot]");
+  if (slot) {
+    equip(Number(slot.dataset.slot));
+    canvas.focus();
   }
-  const hand = ensureWielder();
-  sim.strike(hand, selection.entity, selection.part);
-  step(1);
 });
 
-$("tick").addEventListener("click", () => step(1));
-$("clear").addEventListener("click", () => {
-  resetWorld();
-  $("claim").textContent = "";
-  $("note").textContent = "";
-});
+// ---------------------------------------------------------------------------
+// Ship gate
+// ---------------------------------------------------------------------------
 
-$("play").addEventListener("click", () => {
-  running = !running;
-  $("play").textContent = running ? "Pause" : "Run";
-});
+const scenarios = sim.scenarios();
+$<HTMLSelectElement>("scenario").innerHTML = scenarios
+  .map((s) => `<option value="${s.index}">${s.index + 1}. ${s.name}</option>`)
+  .join("");
 
-function showScenario(index: number) {
+function showScenario(index: number): boolean {
   const s = scenarios[index];
+  inScenario = true;
+  labels.clear();
   events = [];
   lastEventTick = 0;
+  selection = null;
   const result = sim.runScenario(index);
   collectEvents();
-  selection = null;
   $("claim").textContent = s.claim;
   $("note").innerHTML =
     `<span class="verdict ${result.passed ? "pass" : "fail"}">${result.passed ? "held" : "did not hold"}</span> ` +
@@ -702,18 +870,25 @@ function showScenario(index: number) {
   return result.passed;
 }
 
-$("run-one").addEventListener("click", () => {
-  showScenario(Number($<HTMLSelectElement>("scenario").value));
-  $("tally").textContent = "";
-});
+$("run-one").addEventListener("click", () =>
+  showScenario(Number($<HTMLSelectElement>("scenario").value)),
+);
 
 $("run-all").addEventListener("click", () => {
   let passed = 0;
   for (const s of scenarios) if (showScenario(s.index)) passed++;
-  const tally = $("tally");
-  tally.textContent = `${passed} / ${scenarios.length} held`;
-  tally.className = passed === scenarios.length ? "verdict pass" : "verdict fail";
-  $<HTMLSelectElement>("scenario").value = String(scenarios.length - 1);
+  $("note").innerHTML =
+    `<span class="verdict ${passed === scenarios.length ? "pass" : "fail"}">${passed} / ${scenarios.length} held</span> ` +
+    `run from the same code the CI gate runs.`;
+  $("claim").textContent = "§4.4: twenty distinct tactical outcomes, none of them implemented.";
+});
+
+$("restore").addEventListener("click", () => {
+  inScenario = false;
+  buildArena();
+  $("claim").textContent = "";
+  $("note").textContent = "";
+  canvas.focus();
 });
 
 // ---------------------------------------------------------------------------
@@ -721,21 +896,25 @@ $("run-all").addEventListener("click", () => {
 // ---------------------------------------------------------------------------
 
 resize();
+buildArena();
+renderLens();
+canvas.focus();
 
-let lastStep = performance.now();
 const TICK_MS = 1000 * rulesDoc.dt; // §11.2 — 20 Hz.
-
-// The canvas is cheap to redraw every frame; the panels are not, and rebuilding
-// their markup at 60 Hz is the difference between a responsive page and a warm
-// laptop. They only change when the simulation does.
+let accumulator = 0;
+let last = performance.now();
 let paintedTick = -1;
 
 function frame(now: number) {
-  if (running && now - lastStep >= TICK_MS) {
-    const catchUp = Math.min(6, Math.floor((now - lastStep) / TICK_MS));
-    step(catchUp);
-    lastStep = now;
+  // Fixed-step simulation, uncapped render (§11.2). The clamp stops a
+  // backgrounded tab from trying to catch up on thousands of ticks at once.
+  accumulator = Math.min(accumulator + (now - last), TICK_MS * 6);
+  last = now;
+  while (accumulator >= TICK_MS) {
+    stepWorld();
+    accumulator -= TICK_MS;
   }
+
   draw();
   if (sim.tick !== paintedTick) {
     paintedTick = sim.tick;
@@ -743,9 +922,51 @@ function frame(now: number) {
     renderReadout();
     if (selection) renderLens();
   }
-  requestAnimationFrame(frame);
+  // A handle for the browser-driven smoke test in `tools/`. This page is a
+// development arena, not a shipped client, and being able to ask it where the
+// player is standing is worth more than hiding it.
+(window as unknown as Record<string, unknown>).arena = {
+  player: () => player,
+  weapon: () => weapon,
+  equipped: () => arena.rack[equipped].label,
+  position: () => playerPosition(),
+  props: () =>
+    (snapshot?.entities ?? []).map((e) => ({
+      id: e.id,
+      label: labels.get(e.id) ?? null,
+      x: e.position.x,
+      y: e.position.y,
+    })),
+  reach: () => sim.reachOf(player),
+  recovery: () => sim.recoveryOf(player),
+  speed: () => sim.speedOf(player),
+  integrity: (entity: number, part: number) => sim.partIntegrity(entity, part),
+  material: (entity: number, part: number) => sim.materialName(sim.partMaterial(entity, part)),
+};
+
+requestAnimationFrame(frame);
 }
 
-// Start with something on screen: the first ship-gate outcome, already run.
-showScenario(0);
+// A handle for the browser-driven smoke test in `tools/`. This page is a
+// development arena, not a shipped client, and being able to ask it where the
+// player is standing is worth more than hiding it.
+(window as unknown as Record<string, unknown>).arena = {
+  player: () => player,
+  weapon: () => weapon,
+  equipped: () => arena.rack[equipped].label,
+  position: () => playerPosition(),
+  props: () =>
+    (snapshot?.entities ?? []).map((e) => ({
+      id: e.id,
+      label: labels.get(e.id) ?? null,
+      x: e.position.x,
+      y: e.position.y,
+    })),
+  reach: () => sim.reachOf(player),
+  recovery: () => sim.recoveryOf(player),
+  speed: () => sim.speedOf(player),
+  integrity: (entity: number, part: number) => sim.partIntegrity(entity, part),
+  material: (entity: number, part: number) => sim.materialName(sim.partMaterial(entity, part)),
+};
+
 requestAnimationFrame(frame);

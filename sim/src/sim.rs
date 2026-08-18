@@ -83,6 +83,10 @@ pub struct Rules {
     /// set off a charged bystander without ever creating charge.
     pub flux_destabilise_k: Fx,
 
+    /// Half-angle of the arc a swing sweeps, in radians. A target outside it is
+    /// behind you.
+    pub swing_arc: Fx,
+
     /// Hardness falloff between `reference_temp` and the melting point.
     pub soften_k: Fx,
     /// Volume converted per unit of corrosive potential, before per-reaction
@@ -119,6 +123,7 @@ impl Default for Rules {
             arc_heat_per_charge: Fx::from_int(2),
             charge_energy_coeff: Fx::from_int(2),
             flux_destabilise_k: Fx::from_ratio(1, 10),
+            swing_arc: Fx::from_ratio(11, 10),
             soften_k: Fx::from_ratio(9, 10),
             reaction_k: Fx::ONE,
             fragment_max: 4,
@@ -161,11 +166,22 @@ impl Rules {
             arc_heat_per_charge: r.fx()?,
             charge_energy_coeff: r.fx()?,
             flux_destabilise_k: r.fx()?,
+            swing_arc: r.fx()?,
             soften_k: r.fx()?,
             reaction_k: r.fx()?,
             fragment_max: r.u32()?,
             cascade_generations: r.u32()?,
         })
+    }
+}
+
+/// Unit vector, or zero for a zero-length input.
+pub fn normalise(v: V3) -> V3 {
+    let len = v.length();
+    if len.is_zero() {
+        V3::ZERO
+    } else {
+        v.scale(Fx::ONE.div(len))
     }
 }
 
@@ -322,6 +338,9 @@ impl Sim {
     /// conduction alone* still transforms this tick. That last ordering is why
     /// fire spreads and why thermal shock works without either being a feature.
     pub fn step(&mut self) {
+        self.agency_pass();
+        self.effector_pass();
+        self.locomotion_pass();
         self.resolve_pending();
         self.conduction_pass();
         self.radiant_pass();
@@ -419,6 +438,169 @@ impl Sim {
                 }
                 body.parts[i].heat = body.parts[i].heat.sub(dq);
                 ledger.dissipated = ledger.dissipated.add(dq);
+            }
+        }
+    }
+
+    /// Intent becomes motion. §4.1's `Agency` meeting §4.1's `Locomotion`.
+    ///
+    /// Top speed falls with everything the entity is carrying, weapon included,
+    /// so plate armour and a lead maul are felt in the legs. That coupling is
+    /// the whole of "encumbrance" and it is two lines, because mass was already
+    /// derived from the materials.
+    fn agency_pass(&mut self) {
+        let dt = self.rules.dt;
+        for e in self.ecs.agency.ids() {
+            let agency = match self.ecs.agency.get(e) {
+                Some(a) => *a,
+                None => continue,
+            };
+            // Facing is mirrored onto the transform so the renderer, the reach
+            // test and the state hash all read the same number.
+            if let Some(t) = self.ecs.transform.get_mut(e) {
+                t.orientation = agency.facing;
+            }
+            let loco = match self.ecs.locomotion.get(e) {
+                Some(l) => *l,
+                None => continue,
+            };
+
+            let mut carried = self
+                .ecs
+                .body
+                .get(e)
+                .map(|b| b.total_mass(&self.materials))
+                .unwrap_or(Fx::ZERO);
+            if let Some(w) = self.ecs.effectors.get(e).and_then(|f| f.wielded) {
+                carried = carried.add(
+                    self.ecs
+                        .body
+                        .get(w)
+                        .map(|b| b.total_mass(&self.materials))
+                        .unwrap_or(Fx::ZERO),
+                );
+            }
+            let reference = loco.mass_ref.max(Fx::EPSILON);
+            let speed = loco.max_speed.mul(reference).div(reference.add(carried));
+
+            let desired = normalise(agency.move_dir).scale(speed);
+            if let Some(t) = self.ecs.transform.get_mut(e) {
+                let delta = desired.sub(t.velocity);
+                let len = delta.length();
+                let step = loco.accel.mul(dt);
+                t.velocity = if len <= step || len.is_zero() {
+                    desired
+                } else {
+                    t.velocity.add(delta.scale(step.div(len)))
+                };
+            }
+        }
+    }
+
+    /// Tick down swing recovery, and resolve the swings that were asked for.
+    fn effector_pass(&mut self) {
+        let dt = self.rules.dt;
+        let mut ready = Vec::new();
+        for e in self.ecs.effectors.ids() {
+            if let Some(f) = self.ecs.effectors.get_mut(e) {
+                f.recovery = f.recovery.sub(dt).max(Fx::ZERO);
+            }
+            let can = self
+                .ecs
+                .effectors
+                .get(e)
+                .map(|f| f.recovery <= Fx::ZERO)
+                .unwrap_or(false);
+            let wants = self
+                .ecs
+                .agency
+                .get(e)
+                .map(|a| a.want_strike)
+                .unwrap_or(false);
+            if can && wants {
+                ready.push(e);
+            }
+        }
+        for e in ready {
+            self.swing(e);
+        }
+    }
+
+    /// Integrate velocity, then push overlapping bodies apart.
+    fn locomotion_pass(&mut self) {
+        let dt = self.rules.dt;
+        for e in self.ecs.locomotion.ids() {
+            if let Some(t) = self.ecs.transform.get_mut(e) {
+                let step = t.velocity.scale(dt);
+                t.position = t.position.add(step);
+            }
+        }
+        self.separation_pass();
+        self.carry_pass();
+    }
+
+    /// Carried things go where the carrier goes.
+    ///
+    /// Without this a wielded weapon stays wherever it was spawned, and §4.3's
+    /// promise that "an ice weapon melts if you fight near lava. Then you're
+    /// unarmed" is unreachable in play: radiant heat is positional, so the
+    /// sword has to actually be in the fight to be ruined by it.
+    fn carry_pass(&mut self) {
+        let mut carried: Vec<(EntityId, V3)> = Vec::new();
+        for e in self.ecs.effectors.ids() {
+            if let Some(w) = self.ecs.effectors.get(e).and_then(|f| f.wielded) {
+                carried.push((w, self.position_of(e)));
+            }
+        }
+        for (weapon, position) in carried {
+            if let Some(t) = self.ecs.transform.get_mut(weapon) {
+                t.position = position;
+            }
+        }
+    }
+
+    /// Keep moving bodies out of each other.
+    ///
+    /// Not physics — §3 lists rigid-body everything as a non-goal, and this
+    /// resolves overlap without momentum, friction or rotation. It exists so a
+    /// character cannot stand inside the thing it is hitting, which is the
+    /// minimum a melee range test needs to mean anything. Only entities that
+    /// can move are moved, so props stay where they were placed.
+    fn separation_pass(&mut self) {
+        let movers = self.ecs.locomotion.ids();
+        let others = self.ecs.body.ids();
+        for e in movers {
+            let held = self.ecs.effectors.get(e).and_then(|f| f.wielded);
+            let (pos, extent) = match self.ecs.body.get(e) {
+                Some(b) => (self.position_of(e), b.extent()),
+                None => continue,
+            };
+            let mut push = V3::ZERO;
+            for &other in &others {
+                if other == e || Some(other) == held {
+                    continue;
+                }
+                let other_extent = match self.ecs.body.get(other) {
+                    Some(b) => b.extent(),
+                    None => continue,
+                };
+                let delta = pos.sub(self.position_of(other));
+                let distance = delta.length();
+                let minimum = extent.add(other_extent);
+                if distance >= minimum {
+                    continue;
+                }
+                push = push.add(if distance.is_zero() {
+                    // Exactly coincident: pick an axis rather than divide by zero.
+                    V3::new(minimum, Fx::ZERO, Fx::ZERO)
+                } else {
+                    delta.scale(minimum.sub(distance).div(distance))
+                });
+            }
+            if !push.length_squared().is_zero() {
+                if let Some(t) = self.ecs.transform.get_mut(e) {
+                    t.position = t.position.add(push);
+                }
             }
         }
     }
@@ -1099,7 +1281,26 @@ impl Sim {
             if let Some(f) = self.ecs.effectors.get(e) {
                 h.write_u8(1);
                 h.write_i64(f.strength.raw());
+                h.write_i64(f.recovery.raw());
                 h.write_u32(f.wielded.unwrap_or(u32::MAX));
+            } else {
+                h.write_u8(0);
+            }
+            if let Some(l) = self.ecs.locomotion.get(e) {
+                h.write_u8(1);
+                h.write_i64(l.max_speed.raw());
+                h.write_i64(l.accel.raw());
+                h.write_i64(l.mass_ref.raw());
+            } else {
+                h.write_u8(0);
+            }
+            if let Some(a) = self.ecs.agency.get(e) {
+                h.write_u8(1);
+                h.write_i64(a.move_dir.x.raw());
+                h.write_i64(a.move_dir.y.raw());
+                h.write_i64(a.move_dir.z.raw());
+                h.write_i64(a.facing.raw());
+                h.write_bool(a.want_strike);
             } else {
                 h.write_u8(0);
             }

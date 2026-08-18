@@ -52,6 +52,10 @@ interface Exports {
   ): number;
   sim_graft(entity: number, material: number, volume: bigint, temp: bigint, linkTo: number): number;
   sim_set_effectors(entity: number, strength: bigint, wielded: bigint): void;
+  sim_set_locomotion(entity: number, maxSpeed: bigint, accel: bigint, massRef: bigint): void;
+  sim_set_agency(entity: number, dx: bigint, dy: bigint, facing: bigint, wantStrike: number): void;
+  sim_entity_field(entity: number, field: number): bigint;
+  sim_swing(entity: number): number;
   sim_set_part_temp(entity: number, part: number, temp: bigint): number;
   sim_set_part_charge(entity: number, part: number, charge: bigint): number;
   sim_despawn(entity: number): void;
@@ -114,6 +118,8 @@ export interface PartView {
 export interface EntityView {
   id: number;
   position: Vec3;
+  /** Yaw, radians. */
+  orientation: number;
   form: number;
   parts: PartView[];
 }
@@ -134,6 +140,7 @@ export const EVENT_KINDS = [
   "destroyed",
   "spawned",
   "conducted",
+  "swung",
 ] as const;
 
 export type EventKind = (typeof EVENT_KINDS)[number];
@@ -321,6 +328,45 @@ export class Substrate {
     this.ex.sim_set_effectors(entity, toFx(strength), BigInt(wielded ?? -1));
   }
 
+  /** §4.1 `Locomotion`. Without it an entity cannot move at all. */
+  setLocomotion(entity: number, maxSpeed: number, accel: number, massRef: number) {
+    this.ex.sim_set_locomotion(entity, toFx(maxSpeed), toFx(accel), toFx(massRef));
+  }
+
+  /**
+   * §4.1 `Agency` — this tick's intent.
+   *
+   * A keyboard writes it here; §8.3's utility evaluator will write the same
+   * struct at M4. Nothing downstream can tell which, which is §4.1's rule about
+   * never asking "is this a player?" enforced by there being no other way in.
+   */
+  setAgency(entity: number, moveX: number, moveY: number, facing: number, wantStrike: boolean) {
+    this.ex.sim_set_agency(entity, toFx(moveX), toFx(moveY), toFx(facing), wantStrike ? 1 : 0);
+  }
+
+  facingOf(entity: number): number {
+    return fromFx(this.ex.sim_entity_field(entity, 0));
+  }
+
+  /** Seconds until this entity can swing again. */
+  recoveryOf(entity: number): number {
+    return fromFx(this.ex.sim_entity_field(entity, 1));
+  }
+
+  speedOf(entity: number): number {
+    return fromFx(this.ex.sim_entity_field(entity, 2));
+  }
+
+  /** Reach of whatever the entity is wielding, derived from the form (§6.1). */
+  reachOf(entity: number): number {
+    return fromFx(this.ex.sim_entity_field(entity, 3));
+  }
+
+  /** 1 hit, 0 missed, -1 recovering, -2 nothing to swing with. */
+  swing(entity: number): number {
+    return this.ex.sim_swing(entity);
+  }
+
   setPartTemp(entity: number, part: number, temp: number) {
     if (this.ex.sim_set_part_temp(entity, part, toFx(temp)) !== 0) {
       throw new Error(`no part ${part} on entity ${entity}`);
@@ -409,6 +455,8 @@ export class Substrate {
         z: fromFx(dv.getBigInt64(o + 16, true)),
       };
       o += 24;
+      const orientation = fromFx(dv.getBigInt64(o, true));
+      o += 8;
       const form = dv.getUint16(o, true);
       o += 2;
       const partCount = dv.getUint16(o, true);
@@ -429,7 +477,7 @@ export class Substrate {
         });
         o += 37;
       }
-      entities.push({ id, position, form, parts });
+      entities.push({ id, position, orientation, form, parts });
     }
     return { tick, entities };
   }

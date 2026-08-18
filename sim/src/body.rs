@@ -199,6 +199,19 @@ impl Body {
         (heat, charge)
     }
 
+    /// A rough radius, for reach and separation tests.
+    ///
+    /// Not a collision hull — §3 rules out rigid-body everything, and M1 has no
+    /// geometry beyond the form's part offsets. The square root of volume is
+    /// monotonic in size, which is all a melee range check needs.
+    ///
+    /// The coefficient matters more than it looks: separation keeps two bodies
+    /// this far apart, so if it exceeds a weapon's reach nothing can ever be
+    /// hit. A person comes out around 0.8 here against a sword's 1.1 of reach.
+    pub fn extent(&self) -> Fx {
+        self.total_volume().sqrt().mul(Fx::from_ratio(2, 5))
+    }
+
     pub fn any_live(&self) -> bool {
         self.parts.iter().any(|p| p.attached && p.is_live())
     }

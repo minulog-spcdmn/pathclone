@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schema/arena.schema.json",
+  "title": "Hand-made arena",
+  "description": "DESIGN.md §15 M1: 'Single-player, one small hand-made arena.' Hand-made, and made of data. There is no level format here beyond forms and materials placed at coordinates, because in a game with no content database that is all a place can be. Worldgen (§5) replaces this file at M2; until then it is the only authored place in the project.",
+  "type": "object",
+  "required": ["ambient_temp", "player", "rack", "props"],
+  "additionalProperties": false,
+  "properties": {
+    "$comment": { "type": "string" },
+    "ambient_temp": { "type": "number" },
+    "player": {
+      "description": "Not a player type. An entity with a Body, Effectors, Locomotion and Agency — §4.1 forbids anything else, and the only thing that makes it the player is that a keyboard writes its Agency.",
+      "type": "object",
+      "required": ["form", "materials", "at", "strength", "locomotion"],
+      "additionalProperties": false,
+      "properties": {
+        "$comment": { "type": "string" },
+        "form": { "type": "string" },
+        "materials": { "type": "array", "items": { "type": "string" } },
+        "at": { "$ref": "#/$defs/point" },
+        "strength": { "type": "number", "exclusiveMinimum": 0 },
+        "locomotion": {
+          "type": "object",
+          "required": ["max_speed", "accel", "mass_ref"],
+          "additionalProperties": false,
+          "properties": {
+            "max_speed": { "type": "number", "exclusiveMinimum": 0 },
+            "accel": { "type": "number", "exclusiveMinimum": 0 },
+            "mass_ref": {
+              "description": "The carried mass at which top speed halves. This is the whole of encumbrance.",
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        }
+      }
+    },
+    "rack": {
+      "description": "Weapons the arena hands you. Each is a form plus one material per slot; the difference between 'iron sword' and 'obsidian sword' is one string, which is §6.1's 'there is no item database' in practice.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["label", "form", "materials"],
+        "additionalProperties": false,
+        "properties": {
+          "label": { "type": "string" },
+          "form": { "type": "string" },
+          "materials": { "type": "array", "items": { "type": "string" } },
+          "note": {
+            "description": "What the numbers mean, for the loadout panel. Prose, never a stat.",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "props": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["label", "at"],
+        "additionalProperties": false,
+        "properties": {
+          "$comment": { "type": "string" },
+          "label": { "type": "string" },
+          "at": { "$ref": "#/$defs/point" },
+          "form": {
+            "description": "For an assembly. Mutually exclusive with `material`.",
+            "type": "string"
+          },
+          "materials": { "type": "array", "items": { "type": "string" } },
+          "material": {
+            "description": "For a single lump. Mutually exclusive with `form`.",
+            "type": "string"
+          },
+          "volume": { "type": "number", "exclusiveMinimum": 0 },
+          "temp": { "type": "number" },
+          "charge": { "type": "number", "minimum": 0 }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "point": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": { "type": "number" }
+    }
+  }
+}

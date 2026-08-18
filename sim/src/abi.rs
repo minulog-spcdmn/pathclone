@@ -268,9 +268,103 @@ pub extern "C" fn sim_set_effectors(entity: u32, strength: i64, wielded: i64) {
                 } else {
                     Some(wielded as u32)
                 },
+                recovery: Fx::ZERO,
             },
         );
     });
+}
+
+/// §4.1 `Locomotion`. Setting it is what makes an entity able to move at all.
+#[no_mangle]
+pub extern "C" fn sim_set_locomotion(entity: u32, max_speed: i64, accel: i64, mass_ref: i64) {
+    with_sim(|s| {
+        s.ecs.locomotion.insert(
+            entity,
+            crate::ecs::Locomotion {
+                max_speed: Fx::from_raw(max_speed),
+                accel: Fx::from_raw(accel),
+                mass_ref: Fx::from_raw(mass_ref),
+            },
+        );
+    });
+}
+
+/// §4.1 `Agency` — the intent for this tick.
+///
+/// The host writes a keyboard into it; §8.3's utility evaluator will write
+/// itself into the same struct at M4, and nothing between here and the resolver
+/// will be able to tell the difference. That is §4.1's rule about never asking
+/// "is this a player?", enforced by there being no other way in.
+#[no_mangle]
+pub extern "C" fn sim_set_agency(entity: u32, dx: i64, dy: i64, facing: i64, want_strike: u32) {
+    with_sim(|s| {
+        s.ecs.agency.insert(
+            entity,
+            crate::ecs::Agency {
+                move_dir: V3::new(Fx::from_raw(dx), Fx::from_raw(dy), Fx::ZERO),
+                facing: Fx::from_raw(facing),
+                want_strike: want_strike != 0,
+            },
+        );
+    });
+}
+
+/// Per-entity scalars: 0 facing, 1 swing recovery, 2 current speed,
+/// 3 the reach of whatever is being wielded, 4 strength.
+#[no_mangle]
+pub extern "C" fn sim_entity_field(entity: u32, field: u32) -> i64 {
+    with_sim(|s| match field {
+        0 => s
+            .ecs
+            .transform
+            .get(entity)
+            .map(|t| t.orientation.raw())
+            .unwrap_or(0),
+        1 => s
+            .ecs
+            .effectors
+            .get(entity)
+            .map(|f| f.recovery.raw())
+            .unwrap_or(0),
+        2 => s
+            .ecs
+            .transform
+            .get(entity)
+            .map(|t| t.velocity.length().raw())
+            .unwrap_or(0),
+        3 => {
+            let eff = match s.ecs.effectors.get(entity) {
+                Some(f) => *f,
+                None => return 0,
+            };
+            let weapon = eff.wielded.unwrap_or(entity);
+            match s.ecs.body.get(weapon) {
+                Some(b) => {
+                    crate::form::derive_strike(b, &s.forms, &s.materials, eff.strength).reach.raw()
+                }
+                None => 0,
+            }
+        }
+        4 => s
+            .ecs
+            .effectors
+            .get(entity)
+            .map(|f| f.strength.raw())
+            .unwrap_or(0),
+        _ => 0,
+    })
+}
+
+/// Resolve a swing immediately rather than waiting for the tick. Returns
+/// 1 hit, 0 missed, -1 still recovering, -2 nothing to swing.
+#[no_mangle]
+pub extern "C" fn sim_swing(entity: u32) -> i32 {
+    with_sim(|s| match s.swing(entity) {
+        crate::impulse::SwingOutcome::Hit { .. } => 1,
+        crate::impulse::SwingOutcome::Missed => 0,
+        crate::impulse::SwingOutcome::Recovering => -1,
+        crate::impulse::SwingOutcome::NoEffectors => -2,
+    })
 }
 
 #[no_mangle]
@@ -382,6 +476,14 @@ pub extern "C" fn sim_snapshot() -> u32 {
             put_i64(&mut v, pos.x.raw());
             put_i64(&mut v, pos.y.raw());
             put_i64(&mut v, pos.z.raw());
+            put_i64(
+                &mut v,
+                s.ecs
+                    .transform
+                    .get(e)
+                    .map(|t| t.orientation.raw())
+                    .unwrap_or(0),
+            );
             let body = match s.ecs.body.get(e) {
                 Some(b) => b,
                 None => continue,

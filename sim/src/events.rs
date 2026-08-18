@@ -34,6 +34,10 @@ pub enum EventKind {
     Spawned = 7,
     /// Heat crossed between two parts. `a` = energy moved.
     Conducted = 8,
+    /// A swing resolved. `detail` = 1 if it connected, `a` = energy delivered,
+    /// `b` = the reach it had. A miss is worth printing: it tells the player the
+    /// weapon's reach is a real number they can learn.
+    Swung = 9,
 }
 
 impl EventKind {
@@ -48,6 +52,7 @@ impl EventKind {
             EventKind::Destroyed => "destroyed",
             EventKind::Spawned => "spawned",
             EventKind::Conducted => "conducted",
+            EventKind::Swung => "swung",
         }
     }
 
@@ -61,6 +66,7 @@ impl EventKind {
             6 => EventKind::Destroyed,
             7 => EventKind::Spawned,
             8 => EventKind::Conducted,
+            9 => EventKind::Swung,
             _ => EventKind::Impact,
         }
     }

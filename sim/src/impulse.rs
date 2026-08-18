@@ -99,6 +99,19 @@ impl Impulse {
     }
 }
 
+/// What a swing did. The caller usually does not care — the Readout carries the
+/// detail — but the arena uses it to decide whether to animate a hit or a whiff.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SwingOutcome {
+    Hit { target: EntityId, part: u16 },
+    /// Nothing live inside reach and inside the arc.
+    Missed,
+    /// The previous swing has not finished.
+    Recovering,
+    /// No `Effectors`, or nothing to swing.
+    NoEffectors,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct Pending {
     pub target: EntityId,
@@ -692,6 +705,175 @@ impl Sim {
     /// area — which is the entire mechanism behind "an ice weapon melts if you
     /// fight near lava. Then you're unarmed", and behind a quartz blade
     /// exploding against granite. Neither is implemented anywhere.
+    /// Swing at whatever is in front of the attacker.
+    ///
+    /// §15 M1 asks for "basic forms and melee", and this is the whole of it.
+    /// Nothing here is a combat system: reach comes from the form's geometry,
+    /// the recovery between swings is one over §6.1's derived swing rate, and
+    /// the energy delivered is whatever [`derive_strike`] computes from the
+    /// materials that happen to be in the weapon. A heavy weapon is slow
+    /// because it is heavy.
+    ///
+    /// The intent is read from [`Agency`] rather than passed in, because §4.1
+    /// requires that a keyboard and a utility evaluator be indistinguishable
+    /// from here.
+    pub fn swing(&mut self, attacker: EntityId) -> SwingOutcome {
+        // One press, one attempt: the caller re-raises the flag each tick it
+        // wants another swing, and recovery decides how many of those land.
+        if let Some(a) = self.ecs.agency.get_mut(attacker) {
+            a.want_strike = false;
+        }
+        let effectors = match self.ecs.effectors.get(attacker) {
+            Some(f) => *f,
+            None => return SwingOutcome::NoEffectors,
+        };
+        if effectors.recovery.is_positive() {
+            return SwingOutcome::Recovering;
+        }
+        let weapon = effectors.wielded.unwrap_or(attacker);
+        let weapon_body = match self.ecs.body.get(weapon) {
+            Some(b) => b,
+            None => return SwingOutcome::NoEffectors,
+        };
+        let profile = derive_strike(weapon_body, &self.forms, &self.materials, effectors.strength);
+
+        // Swinging costs the same whether or not it connects. Missing has to be
+        // possible for reach to mean anything.
+        let recovery = if profile.rate.is_positive() {
+            Fx::ONE.div(profile.rate)
+        } else {
+            Fx::ONE
+        };
+        if let Some(f) = self.ecs.effectors.get_mut(attacker) {
+            f.recovery = recovery;
+        }
+
+        let origin = self.position_of(attacker);
+        let self_extent = self
+            .ecs
+            .body
+            .get(attacker)
+            .map(|b| b.extent())
+            .unwrap_or(Fx::ZERO);
+        let facing = self
+            .ecs
+            .agency
+            .get(attacker)
+            .map(|a| a.facing)
+            .unwrap_or(Fx::ZERO);
+        let aim = V3::new(facing.cos(), facing.sin(), Fx::ZERO);
+        let cone = self.rules.swing_arc.cos();
+
+        let mut best: Option<(Fx, EntityId)> = None;
+        for candidate in self.ecs.body.ids() {
+            if candidate == attacker || candidate == weapon {
+                continue;
+            }
+            let body = match self.ecs.body.get(candidate) {
+                Some(b) if b.any_live() => b,
+                _ => continue,
+            };
+            let delta = self.position_of(candidate).sub(origin);
+            let distance = delta.length();
+            // Reach is measured from the wielder's own surface to the target's,
+            // not centre to centre — otherwise a big creature could never be
+            // hit by anything, because separation holds it further away than
+            // the weapon is long.
+            let gap = distance.sub(body.extent()).sub(self_extent);
+            if gap > profile.reach {
+                continue;
+            }
+            // Anything you are standing on top of is in front of you.
+            if distance.is_positive() {
+                let direction = crate::sim::normalise(delta);
+                let alignment = direction
+                    .x
+                    .mul(aim.x)
+                    .add(direction.y.mul(aim.y))
+                    .add(direction.z.mul(aim.z));
+                if alignment < cone {
+                    continue;
+                }
+            }
+            let better = match best {
+                None => true,
+                Some((d, id)) => distance < d || (distance == d && candidate < id),
+            };
+            if better {
+                best = Some((distance, candidate));
+            }
+        }
+
+        let target = match best {
+            Some((_, t)) => t,
+            None => {
+                let tick = self.tick;
+                self.events.push(Event {
+                    tick,
+                    kind: EventKind::Swung,
+                    entity: attacker,
+                    part: profile.strike_part,
+                    material_before: NO_MATERIAL,
+                    material_after: NO_MATERIAL,
+                    detail: 0,
+                    a: Fx::ZERO,
+                    b: profile.reach,
+                });
+                return SwingOutcome::Missed;
+            }
+        };
+
+        let part = self.pick_hit_part(attacker, target);
+        let tick = self.tick;
+        self.events.push(Event {
+            tick,
+            kind: EventKind::Swung,
+            entity: attacker,
+            part,
+            material_before: NO_MATERIAL,
+            material_after: mat_of(self, target, part),
+            detail: 1,
+            a: profile.kinetic,
+            b: profile.reach,
+        });
+        self.strike(attacker, target, part);
+        SwingOutcome::Hit { target, part }
+    }
+
+    /// Which part of the target a blow lands on.
+    ///
+    /// Weighted by volume from the attacker's own PRNG (§12.4 rule 4), so a
+    /// torso is hit more often than a hand and the same seed always produces
+    /// the same fight. No hit-location table, and no notion of a "vital" —
+    /// severing an arm matters because of what the arm was made of.
+    fn pick_hit_part(&mut self, attacker: EntityId, target: EntityId) -> u16 {
+        let mut total = Fx::ZERO;
+        let mut candidates: Vec<(u16, Fx)> = Vec::new();
+        if let Some(body) = self.ecs.body.get(target) {
+            for (i, p) in body.parts.iter().enumerate() {
+                if p.attached && p.is_live() {
+                    total = total.add(p.volume);
+                    candidates.push((i as u16, p.volume));
+                }
+            }
+        }
+        if candidates.is_empty() {
+            return 0;
+        }
+        let roll = match self.ecs.rng.get_mut(attacker) {
+            Some(r) => r.unit().mul(total),
+            None => Fx::ZERO,
+        };
+        let mut running = Fx::ZERO;
+        for (slot, volume) in &candidates {
+            running = running.add(*volume);
+            if roll < running {
+                return *slot;
+            }
+        }
+        candidates[candidates.len() - 1].0
+    }
+
     pub fn strike(&mut self, attacker: EntityId, target: EntityId, target_part: u16) -> Option<StrikeProfile> {
         let eff = *self.ecs.effectors.get(attacker)?;
         let weapon = eff.wielded.unwrap_or(attacker);

@@ -1,5 +1,5 @@
 {
-  "name": "pathclone",
+  "name": "substrate",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -18,11 +18,8 @@
     "check": "npm run data:validate && npm run sim:build && npm run data:pack && npm run gate && npm run fuzz && npm run sim:test && npm run determinism"
   },
   "devDependencies": {
-    "@types/three": "^0.185.4",
     "typescript": "~6.0.2",
     "vite": "^8.2.0"
   },
-  "dependencies": {
-    "three": "^0.185.1"
-  }
+  "description": "Deterministic simulation substrate for the systemic sandbox ARPG in docs/DESIGN.md \u2014 milestones M0 and M1."
 }

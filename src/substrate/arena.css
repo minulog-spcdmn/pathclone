@@ -381,3 +381,61 @@ table.props td:last-child {
   color: var(--accent);
   white-space: pre-wrap;
 }
+
+/* --- loadout rack -------------------------------------------------------- */
+
+.rack {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.rack .slot {
+  text-align: left;
+  padding: 4px 7px;
+  font-size: 11.5px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--ink-dim);
+  border-radius: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rack .slot b {
+  color: var(--ink-faint);
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.rack .slot.on {
+  border-color: var(--accent);
+  color: #fff;
+  background: rgba(111, 179, 255, 0.1);
+}
+
+.rack .slot.on b {
+  color: var(--accent);
+}
+
+#weapon-note {
+  margin-top: 8px;
+  font-style: italic;
+}
+
+.ev.swung {
+  border-left-color: #8fa4bd;
+}
+.ev.swung .k {
+  color: #8fa4bd;
+}
+
+canvas#view:focus {
+  outline: none;
+}
+
+canvas#view {
+  cursor: crosshair;
+}

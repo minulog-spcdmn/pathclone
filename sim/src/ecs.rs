@@ -76,6 +76,44 @@ pub struct Transform {
 pub struct Effectors {
     pub strength: Fx,
     pub wielded: Option<EntityId>,
+    /// Seconds left before another swing can start. Set from §6.1's derived
+    /// swing rate, so a heavy weapon is slow because it is heavy and not
+    /// because a number somewhere says "slow".
+    pub recovery: Fx,
+}
+
+/// §4.1 `Locomotion` — "mode(s), speed curves, terrain affinity".
+///
+/// Terrain affinity waits for terrain. What exists at M1 is the part that
+/// couples to the rest of the substrate: top speed falls as the entity gets
+/// heavier, so plate armour and a lead maul are felt in the legs. That is one
+/// line in [`Sim::agency_pass`] rather than an encumbrance system.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Locomotion {
+    pub max_speed: Fx,
+    /// Units per second per second, toward the desired velocity.
+    pub accel: Fx,
+    /// The mass at which top speed is halved.
+    pub mass_ref: Fx,
+}
+
+/// §4.1 `Agency` — "goal stack, utility evaluator config, memory".
+///
+/// At M1 there is no utility AI (§8.3 is M4), so this holds only the intent a
+/// controller has expressed this tick. The point is which controller: §4.1 is
+/// explicit that a system must never ask "is this a player?", only whether an
+/// entity "has `Agency` with an external controller". The player is an entity
+/// whose intent arrives from a keyboard; a wolf will be an entity whose intent
+/// arrives from a utility evaluator. Both write this struct, and everything
+/// downstream reads it without knowing which.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Agency {
+    /// Desired direction of travel. Zero means stand still.
+    pub move_dir: V3,
+    /// Where the entity is looking, in radians.
+    pub facing: Fx,
+    /// Raised to ask for a swing; cleared once the swing resolves or is refused.
+    pub want_strike: bool,
 }
 
 /// Dense optional storage, iterated in id order.
@@ -150,6 +188,8 @@ pub struct Ecs {
     pub transform: ComponentStore<Transform>,
     pub body: ComponentStore<Body>,
     pub effectors: ComponentStore<Effectors>,
+    pub locomotion: ComponentStore<Locomotion>,
+    pub agency: ComponentStore<Agency>,
     /// Per-entity PRNG (§12.4 rule 4).
     pub rng: ComponentStore<Rng>,
     /// An opaque host-side name handle. Inert — never branched on, never used
@@ -188,6 +228,8 @@ impl Ecs {
         self.transform.remove(e);
         self.body.remove(e);
         self.effectors.remove(e);
+        self.locomotion.remove(e);
+        self.agency.remove(e);
         self.rng.remove(e);
         self.label.remove(e);
         self.free.push(e);

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.invalid/schema/rules.schema.json",
   "title": "Simulation rules",
-  "description": "The hand-authored rules of DESIGN.md §0 — 'as few as possible, and hand-authored with extreme care'. §13's balance philosophy points here first: an overpowered outcome is fixed by a coefficient in this file or a property in materials.json, never by a special case in the resolver. Nothing here may name a material, an item or a creature.",
+  "description": "The hand-authored rules of DESIGN.md \u00a70 \u2014 'as few as possible, and hand-authored with extreme care'. \u00a713's balance philosophy points here first: an overpowered outcome is fixed by a coefficient in this file or a property in materials.json, never by a special case in the resolver. Nothing here may name a material, an item or a creature.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -26,71 +26,129 @@
     "arc_heat_per_charge",
     "charge_energy_coeff",
     "flux_destabilise_k",
+    "swing_arc",
     "soften_k",
     "reaction_k",
     "fragment_max",
     "cascade_generations"
   ],
   "properties": {
-    "$comment": { "type": "string" },
-
-    "ambient_temp": { "type": "number" },
+    "$comment": {
+      "type": "string"
+    },
+    "ambient_temp": {
+      "type": "number"
+    },
     "reference_temp": {
       "description": "The temperature at which authored hardness values are quoted.",
       "type": "number"
     },
-    "aether_density": { "type": "number", "minimum": 0, "maximum": 1 },
-    "dt": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
-
+    "aether_density": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "dt": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 1
+    },
     "fracture_k": {
-      "description": "§4.3 step 3's k: how far past hardness a material must be pushed before it separates, scaled by toughness.",
+      "description": "\u00a74.3 step 3's k: how far past hardness a material must be pushed before it separates, scaled by toughness.",
       "type": "number",
       "minimum": 0
     },
     "blunt_k": {
-      "description": "Energy density per unit toughness at which a broad impact breaks a part regardless of stress. §4.3 promises a maul that beats brittle armour without denting it; a pure stress test cannot produce that, because a large contact area is exactly what keeps stress low.",
+      "description": "Energy density per unit toughness at which a broad impact breaks a part regardless of stress. \u00a74.3 promises a maul that beats brittle armour without denting it; a pure stress test cannot produce that, because a large contact area is exactly what keeps stress low.",
       "type": "number",
       "minimum": 0
     },
-    "deform_k": { "type": "number", "minimum": 0 },
-    "friction_heat_k": { "type": "number", "minimum": 0, "maximum": 1 },
+    "deform_k": {
+      "type": "number",
+      "minimum": 0
+    },
+    "friction_heat_k": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
     "strike_return_k": {
       "description": "Share of a blow returned into the striking part, scaled by the hardness ratio of the two materials.",
       "type": "number",
       "minimum": 0
     },
-
-    "conduction_k": { "type": "number", "minimum": 0 },
-    "ambient_conduction_k": { "type": "number", "minimum": 0 },
-    "radiant_k": {
-      "description": "Heat exchanged between separate entities. Conduction along an assembly cannot carry a fire from a burning tree to the wolf beside it, and §4.3 promises exactly that.",
+    "conduction_k": {
       "type": "number",
       "minimum": 0
     },
-    "radiant_radius": { "type": "number", "minimum": 0 },
-
-    "charge_diffusion_k": { "type": "number", "minimum": 0 },
-    "charge_leak_k": { "type": "number", "minimum": 0 },
-    "arc_radius": { "type": "number", "minimum": 0 },
-    "arc_loss": { "type": "number", "minimum": 0, "maximum": 1 },
-    "arc_heat_per_charge": { "type": "number", "minimum": 0 },
-    "charge_energy_coeff": { "type": "number", "minimum": 0 },
-    "flux_destabilise_k": { "type": "number", "minimum": 0 },
-
+    "ambient_conduction_k": {
+      "type": "number",
+      "minimum": 0
+    },
+    "radiant_k": {
+      "description": "Heat exchanged between separate entities. Conduction along an assembly cannot carry a fire from a burning tree to the wolf beside it, and \u00a74.3 promises exactly that.",
+      "type": "number",
+      "minimum": 0
+    },
+    "radiant_radius": {
+      "type": "number",
+      "minimum": 0
+    },
+    "charge_diffusion_k": {
+      "type": "number",
+      "minimum": 0
+    },
+    "charge_leak_k": {
+      "type": "number",
+      "minimum": 0
+    },
+    "arc_radius": {
+      "type": "number",
+      "minimum": 0
+    },
+    "arc_loss": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "arc_heat_per_charge": {
+      "type": "number",
+      "minimum": 0
+    },
+    "charge_energy_coeff": {
+      "type": "number",
+      "minimum": 0
+    },
+    "flux_destabilise_k": {
+      "type": "number",
+      "minimum": 0
+    },
     "soften_k": {
       "description": "How much of a material's hardness is lost between reference temperature and its melting point.",
       "type": "number",
       "minimum": 0,
       "maximum": 1
     },
-    "reaction_k": { "type": "number", "minimum": 0 },
-
-    "fragment_max": { "type": "integer", "minimum": 1, "maximum": 64 },
+    "reaction_k": {
+      "type": "number",
+      "minimum": 0
+    },
+    "fragment_max": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64
+    },
     "cascade_generations": {
-      "description": "§4.3 bounds cascades to guarantee termination; the document's figure is 3.",
+      "description": "\u00a74.3 bounds cascades to guarantee termination; the document's figure is 3.",
       "type": "integer",
       "minimum": 1,
       "maximum": 16
+    },
+    "swing_arc": {
+      "description": "Half-angle of the arc a swing sweeps, in radians. A target outside it is behind you, which is what makes facing matter.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 3.15
     }
   }
 }
