@@ -1,6 +1,6 @@
 //! FNV-1a 64, used to fingerprint simulation state.
 //!
-//! §12.4 rule 6 needs a cheap, order-sensitive, integer-only digest that gives
+//! §14.4 rule 9 needs a cheap, order-sensitive, integer-only digest that gives
 //! the same answer on x86-64 and wasm32. Cryptographic strength is irrelevant
 //! here; what matters is that nothing in the hash path touches a float, a
 //! pointer value, or an unordered container.

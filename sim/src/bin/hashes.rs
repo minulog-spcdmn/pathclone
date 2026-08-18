@@ -1,9 +1,9 @@
-//! Native half of the §12.4 rule 6 determinism test.
+//! Native half of the §14.4 rule 9 determinism test.
 //!
 //! Runs the same seeded soak the browser runs, on a completely different
 //! target — x86-64 with a native code generator instead of wasm32 — and prints
 //! the state hash at intervals. `tools/determinism.ts` runs the wasm half and
-//! compares. If the two ever disagree, one of §12.4's six rules has been
+//! compares. If the two ever disagree, one of §14.4's six rules has been
 //! broken, and the design is explicit that nothing else ships until it is
 //! fixed.
 //!

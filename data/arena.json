@@ -1,10 +1,10 @@
 {
-  "$comment": "DESIGN.md §15 M1: 'Single-player, one small hand-made arena.' Hand-made, and made of data — the arena is a list of forms and materials placed at coordinates, which is all a place can be in a game with no content database. Every dummy below is the same form; the only thing that differs is what its target slot is made of, and that is the entire lesson the arena teaches.",
+  "$comment": "DESIGN.md §17 M1: 'Single-player, one small hand-made arena.' Hand-made, and made of data — the arena is a list of forms and materials placed at coordinates, which is all a place can be in a game with no content database. Every dummy below is the same form; the only thing that differs is what its target slot is made of, and that is the entire lesson the arena teaches.",
 
   "ambient_temp": 20,
 
   "player": {
-    "$comment": "Not a player type. An entity with a Body, Effectors, Locomotion and Agency, exactly as §4.1 requires — the only thing that makes it the player is that a keyboard writes its Agency.",
+    "$comment": "Not a player type. An entity with a Body, Effectors, Locomotion and Agency, exactly as §6.1 requires — the only thing that makes it the player is that a keyboard writes its Agency.",
     "form": "body_bipedal",
     "materials": ["flesh", "flesh", "flesh", "flesh", "flesh", "flesh", "boarhide"],
     "at": [0, 0],
@@ -35,7 +35,7 @@
       "label": "meteoric sword",
       "form": "blade_straight_single_edge",
       "materials": ["meteoric_steel", "cold_iron", "boarhide"],
-      "note": "hard AND tough — the anomaly of §5.4, and it simply never breaks"
+      "note": "hard AND tough — the anomaly of §7.4, and it simply never breaks"
     },
     {
       "label": "iron dagger",

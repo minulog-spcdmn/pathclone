@@ -1,4 +1,4 @@
-//! L2 — Interaction. §4.3, the impulse model.
+//! L2 — Interaction. §6.3, the impulse model.
 //!
 //! > "The single largest de-hardcoding win in this design. **Delete the damage
 //! > type enum.** Nothing in this game deals 'fire damage.'"
@@ -8,7 +8,7 @@
 //! enter through [`Sim::inject`] as the same seven numbers, and leave through
 //! the same seven steps of [`Sim::apply`].
 //!
-//! Two implementation warnings from §4.3 are load-bearing and are called out
+//! Two implementation warnings from §6.3 are load-bearing and are called out
 //! where they are honoured:
 //!
 //! * cascades are bounded and energy is conservative-or-lossy, never generative;
@@ -22,7 +22,7 @@ use crate::form::{derive_strike, StrikeProfile};
 use crate::material::{Material, TagSet, NO_MATERIAL};
 use crate::sim::Sim;
 
-/// A packet of transferred quantities. §4.3.
+/// A packet of transferred quantities. §6.3.
 ///
 /// Note what is *not* here: no source, no element, no school, no attacker, no
 /// "type". A part being resolved cannot tell what hit it, only what arrived.
@@ -42,7 +42,7 @@ pub struct Impulse {
     pub reagent: TagSet,
     /// Field disturbance. Destabilises stored charge in whatever it washes
     /// over — it makes charged things arc early rather than adding charge,
-    /// because a term that *added* charge would be an energy source and §4.3
+    /// because a term that *added* charge would be an energy source and §6.3
     /// names those the #1 exploit vector.
     pub aether_flux: Fx,
 }
@@ -123,7 +123,7 @@ pub struct Pending {
 ///
 /// Everything in here is built with commutative operations — sums, a max, and a
 /// bitwise OR — so the accumulated result cannot depend on the order impulses
-/// arrived in. That is §4.3's "otherwise multiplayer desyncs and hit-order
+/// arrived in. That is §6.3's "otherwise multiplayer desyncs and hit-order
 /// exploits appear", made structural.
 #[derive(Clone, Copy, Debug, Default)]
 struct Acc {
@@ -177,7 +177,7 @@ impl Sim {
                 break;
             }
             if generation >= self.rules.cascade_generations {
-                // §4.3 bounds the cascade to guarantee termination. Anything
+                // §6.3 bounds the cascade to guarantee termination. Anything
                 // still in flight is dropped, and its energy is booked as
                 // leaving the system so the audit stays honest about it.
                 let coeff = self.rules.charge_energy_coeff;
@@ -211,7 +211,7 @@ impl Sim {
             };
             let hardness = mat.hardness_at(temp, self.rules.reference_temp, self.rules.soften_k);
 
-            // §4.3 step 1. Elastic materials hand some of the energy back
+            // §6.3 step 1. Elastic materials hand some of the energy back
             // instead of taking it.
             let absorbed = p
                 .imp
@@ -224,7 +224,7 @@ impl Sim {
                 absorbed.div(area)
             };
 
-            // §4.3 step 2, computed here rather than at apply time so that it
+            // §6.3 step 2, computed here rather than at apply time so that it
             // reads pre-impact state for every impulse in the generation.
             //
             // Plastic deformation is a stress phenomenon by definition, so only
@@ -291,7 +291,7 @@ impl Sim {
 
     /// The seven steps, in order, for one part.
     ///
-    /// One deliberate reordering against §4.3's numbering: incoming heat lands
+    /// One deliberate reordering against §6.3's numbering: incoming heat lands
     /// (step 4) *before* the fracture check (step 3) resolves. Steps 1–3 are
     /// all mechanical and read pre-impact properties, so the fracture decision
     /// is unchanged by the swap; but a part that shatters must hand its stored
@@ -374,7 +374,7 @@ impl Sim {
         // Two routes, and a part breaks if either one is beaten.
         //
         // Penetration: stress past hardness by a toughness-scaled margin. This
-        // is §4.3 step 3 verbatim, plus a scaling by integrity — already
+        // is §6.3 step 3 verbatim, plus a scaling by integrity — already
         // damaged material carries cracks, and cracks are where the next blow
         // goes. Without that term a part is exactly as hard to break on the
         // last hit as on the first, and fights have no arc.
@@ -467,8 +467,8 @@ impl Sim {
         }
     }
 
-    /// §4.3 step 7. Tag-matched, so the table stays authorable as the material
-    /// count grows (§4.2: "Reaction tags let materials interact without an N²
+    /// §6.3 step 7. Tag-matched, so the table stays authorable as the material
+    /// count grows (§6.2: "Reaction tags let materials interact without an N²
     /// table").
     fn react(&mut self, acc: &Acc, generation: u8) {
         let (mat, _, volume) = match self.part_state(acc.entity, acc.part) {
@@ -585,7 +585,7 @@ impl Sim {
         }
     }
 
-    /// §4.3 step 3: "Fractured parts become entities in their own right."
+    /// §6.3 step 3: "Fractured parts become entities in their own right."
     fn fracture(&mut self, e: EntityId, part: u16, fragments: u32) {
         let (material, volume, heat, charge, integrity) = {
             let body = match self.ecs.body.get_mut(e) {
@@ -678,7 +678,7 @@ impl Sim {
         Some((entity, slot))
     }
 
-    /// Small deterministic offset from an entity's own PRNG (§12.4 rule 4).
+    /// Small deterministic offset from an entity's own PRNG (§14.4 rule 7).
     fn jitter(&mut self, e: EntityId) -> V3 {
         match self.ecs.rng.get_mut(e) {
             Some(r) => {
@@ -693,7 +693,7 @@ impl Sim {
     }
 
     // -----------------------------------------------------------------------
-    // Melee, derived from §6.1
+    // Melee, derived from §8.1
     // -----------------------------------------------------------------------
 
     /// Swing whatever `attacker` is wielding at `target`.
@@ -707,14 +707,14 @@ impl Sim {
     /// exploding against granite. Neither is implemented anywhere.
     /// Swing at whatever is in front of the attacker.
     ///
-    /// §15 M1 asks for "basic forms and melee", and this is the whole of it.
+    /// §17 M1 asks for "basic forms and melee", and this is the whole of it.
     /// Nothing here is a combat system: reach comes from the form's geometry,
-    /// the recovery between swings is one over §6.1's derived swing rate, and
+    /// the recovery between swings is one over §8.1's derived swing rate, and
     /// the energy delivered is whatever [`derive_strike`] computes from the
     /// materials that happen to be in the weapon. A heavy weapon is slow
     /// because it is heavy.
     ///
-    /// The intent is read from [`Agency`] rather than passed in, because §4.1
+    /// The intent is read from [`Agency`] rather than passed in, because §6.1
     /// requires that a keyboard and a utility evaluator be indistinguishable
     /// from here.
     pub fn swing(&mut self, attacker: EntityId) -> SwingOutcome {
@@ -842,7 +842,7 @@ impl Sim {
 
     /// Which part of the target a blow lands on.
     ///
-    /// Weighted by volume from the attacker's own PRNG (§12.4 rule 4), so a
+    /// Weighted by volume from the attacker's own PRNG (§14.4 rule 7), so a
     /// torso is hit more often than a hand and the same seed always produces
     /// the same fight. No hit-location table, and no notion of a "vital" —
     /// severing an arm matters because of what the arm was made of.

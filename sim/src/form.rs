@@ -1,7 +1,7 @@
-//! L3 — Form. §6.1: "an item is a form, made of materials, produced by a
+//! L3 — Form. §8.1: "an item is a form, made of materials, produced by a
 //! process, with a history."
 //!
-//! Forms are the one place §6.1 says hand-authored content is correct, because
+//! Forms are the one place §8.1 says hand-authored content is correct, because
 //! "forms are *rules about shape*, not content". They carry geometry and
 //! attachment topology and nothing else — no stats, no damage numbers, no
 //! material assumptions. Every statistic in the table below is derived at the
@@ -23,7 +23,7 @@ pub struct FormPart {
     /// Where this part sits in the form's own frame, +x forward, +y right.
     ///
     /// The simulation never reads this — it has no opinion about where a hand
-    /// is relative to a torso. It is here because §6.1 says a form *is* its
+    /// is relative to a torso. It is here because §8.1 says a form *is* its
     /// geometry, and because a renderer that had to invent the layout would be
     /// inventing content.
     pub offset_x: Fx,
@@ -41,7 +41,7 @@ pub struct Form {
     /// Index into this form's parts — the geometry that meets the target.
     pub strike_part: u16,
     /// Contact area of the striking geometry. This one number is the whole
-    /// difference between a blade and a maul (§4.3).
+    /// difference between a blade and a maul (§6.3).
     pub edge_area: Fx,
     /// Multiplies the wielder's strength into swing velocity — a long haft
     /// gives leverage, a dagger does not.
@@ -51,7 +51,7 @@ pub struct Form {
     /// Without it, per-hit energy would fall monotonically with mass and there
     /// would be no reason to ever build a heavy weapon. With it, delivered
     /// energy peaks at an intermediate mass, so *the best blade material for a
-    /// given wielder is a discovery* rather than "pick the densest". §5.4 asks
+    /// given wielder is a discovery* rather than "pick the densest". §7.4 asks
     /// for exactly this shape in the alloy curve; it costs one number to have
     /// it apply to every form as well.
     pub max_speed: Fx,
@@ -229,10 +229,10 @@ impl<'a> Reader<'a> {
 }
 
 // ---------------------------------------------------------------------------
-// Derived statistics — §6.1. "All statistics are derived, none are stored."
+// Derived statistics — §8.1. "All statistics are derived, none are stored."
 // ---------------------------------------------------------------------------
 
-/// Everything §6.1's derivation table produces for a swing, computed fresh.
+/// Everything §8.1's derivation table produces for a swing, computed fresh.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct StrikeProfile {
     pub mass: Fx,

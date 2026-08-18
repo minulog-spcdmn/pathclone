@@ -1,7 +1,7 @@
 //! The world: everything that happens between impulses.
 //!
 //! Tick order is fixed and documented here because it is load-bearing for
-//! §12.4 rule 6 — two hosts that run these passes in different orders produce
+//! §14.4 rule 9 — two hosts that run these passes in different orders produce
 //! different state hashes even with identical arithmetic.
 
 use crate::body::{Body, Part};
@@ -17,9 +17,9 @@ use crate::material::{
 
 /// Every tunable in the simulation, loaded from `data/rules.json`.
 ///
-/// §12.5: "Every non-code definition is a schema-validated data file ...
+/// §14.5: "Every non-code definition is a schema-validated data file ...
 /// worldgen layer parameters, reaction tags, cost model coefficients." These
-/// are the coefficients §13 tells the balance owner to reach for first, and
+/// are the coefficients §15 tells the balance owner to reach for first, and
 /// keeping them out of the binary is what makes that a data edit rather than a
 /// rebuild.
 #[derive(Clone, Copy, Debug)]
@@ -28,19 +28,19 @@ pub struct Rules {
     pub ambient_temp: Fx,
     /// The temperature at which authored `hardness` values are quoted.
     pub reference_temp: Fx,
-    /// §5.1 layer 5. Present so nothing downstream has to be retrofitted; at M1
+    /// §7.1 layer 5. Present so nothing downstream has to be retrofitted; at M1
     /// it only scales charge leak.
     pub aether_density: Fx,
-    /// Seconds per tick. 20 Hz per §11.2.
+    /// Seconds per tick. 20 Hz per §13.2.
     pub dt: Fx,
 
-    /// §4.3 step 3's `k`: how far past hardness a material must be pushed
+    /// §6.3 step 3's `k`: how far past hardness a material must be pushed
     /// before it fractures, scaled by toughness.
     pub fracture_k: Fx,
     /// Energy density per unit toughness at which a broad impact breaks a part
     /// regardless of how little stress it applied.
     ///
-    /// §4.3 step 3 is written purely in terms of stress, but the consequence it
+    /// §6.3 step 3 is written purely in terms of stress, but the consequence it
     /// promises two paragraphs later — "a maul with high kinetic and large
     /// contact area doesn't penetrate but transfers enough energy to fracture
     /// brittle armour" — cannot come out of a stress test, because a large
@@ -64,7 +64,7 @@ pub struct Rules {
     /// Heat exchanged between *separate* entities standing near each other.
     ///
     /// Conduction along an assembly graph cannot carry a fire from a burning
-    /// tree to the wolf beside it, and §4.3 promises exactly that. This is the
+    /// tree to the wolf beside it, and §6.3 promises exactly that. This is the
     /// term that does it, and it is symmetric, so it moves energy and never
     /// makes it.
     pub radiant_k: Fx,
@@ -77,7 +77,7 @@ pub struct Rules {
     /// Fraction of arced charge that becomes heat instead of arriving.
     pub arc_loss: Fx,
     pub arc_heat_per_charge: Fx,
-    /// Energy equivalent of one unit of stored charge, for the §4.3 audit.
+    /// Energy equivalent of one unit of stored charge, for the §6.3 audit.
     pub charge_energy_coeff: Fx,
     /// How far a passing field lowers a part's discharge threshold. Lets an arc
     /// set off a charged bystander without ever creating charge.
@@ -94,7 +94,7 @@ pub struct Rules {
     pub reaction_k: Fx,
 
     pub fragment_max: u32,
-    /// §4.3: "bounded to 3 cascade generations to guarantee termination".
+    /// §6.3: "bounded to 3 cascade generations to guarantee termination".
     pub cascade_generations: u32,
 }
 
@@ -185,7 +185,7 @@ pub fn normalise(v: V3) -> V3 {
     }
 }
 
-/// §4.3: "total energy must be conservative-or-lossy, never generative."
+/// §6.3: "total energy must be conservative-or-lossy, never generative."
 ///
 /// Energy-generating loops are named as the #1 exploit vector, so the sim keeps
 /// a running ledger rather than relying on a debug assertion that only fires
@@ -356,7 +356,7 @@ impl Sim {
         }
     }
 
-    /// §4.3 step 4, run over the assembly graph. Symmetric: whatever leaves one
+    /// §6.3 step 4, run over the assembly graph. Symmetric: whatever leaves one
     /// part arrives in the other, so this pass moves energy and never creates
     /// it.
     fn conduction_pass(&mut self) {
@@ -442,7 +442,7 @@ impl Sim {
         }
     }
 
-    /// Intent becomes motion. §4.1's `Agency` meeting §4.1's `Locomotion`.
+    /// Intent becomes motion. §6.1's `Agency` meeting §6.1's `Locomotion`.
     ///
     /// Top speed falls with everything the entity is carrying, weapon included,
     /// so plate armour and a lead maul are felt in the legs. That coupling is
@@ -541,7 +541,7 @@ impl Sim {
 
     /// Carried things go where the carrier goes.
     ///
-    /// Without this a wielded weapon stays wherever it was spawned, and §4.3's
+    /// Without this a wielded weapon stays wherever it was spawned, and §6.3's
     /// promise that "an ice weapon melts if you fight near lava. Then you're
     /// unarmed" is unreachable in play: radiant heat is positional, so the
     /// sword has to actually be in the fight to be ruined by it.
@@ -609,7 +609,7 @@ impl Sim {
     ///
     /// Gather-then-apply like everything else, and symmetric per pair, so the
     /// result does not depend on which entity is visited first. Pairwise is
-    /// affordable in a bare arena; at world scale this belongs behind §12.3's
+    /// affordable in a bare arena; at world scale this belongs behind §14.3's
     /// active ring, which is a change of *which pairs* are considered and not a
     /// change to the rule.
     fn radiant_pass(&mut self) {
@@ -746,7 +746,7 @@ impl Sim {
         self.discharge_scan();
     }
 
-    /// §4.3 step 6, run every tick rather than only on impact, so a part
+    /// §6.3 step 6, run every tick rather than only on impact, so a part
     /// charged slowly still eventually arcs.
     fn discharge_scan(&mut self) {
         let mut arcs: Vec<(EntityId, u16, Fx, Fx)> = Vec::new();
@@ -774,7 +774,7 @@ impl Sim {
         }
     }
 
-    /// §4.3 step 5, run over every part rather than only struck ones.
+    /// §6.3 step 5, run over every part rather than only struck ones.
     fn phase_pass(&mut self) {
         for e in self.ecs.body.ids() {
             let count = match self.ecs.body.get(e) {
@@ -1092,7 +1092,7 @@ impl Sim {
     /// Move charge above a part's threshold to the best nearby conductor.
     ///
     /// "This is how chain lightning happens without a 'chain lightning'
-    /// feature" (§4.3 step 6). The target search is a plain ranking over
+    /// feature" (§6.3 step 6). The target search is a plain ranking over
     /// conductivity and distance; a wet target wins it because water conducts,
     /// not because anything here knows what water is.
     pub(crate) fn discharge(&mut self, e: EntityId, part: u16, excess: Fx, limit: Fx) {
@@ -1254,7 +1254,7 @@ impl Sim {
         }
     }
 
-    /// §12.4 rule 6's fingerprint. Walks entities in id order and parts in
+    /// §14.4 rule 9's fingerprint. Walks entities in id order and parts in
     /// index order; touches no name bytes, no pointers and no floats.
     pub fn state_hash(&self) -> u64 {
         let mut h = Hasher::new();

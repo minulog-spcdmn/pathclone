@@ -1,5 +1,5 @@
 /**
- * §10.1 — appearance derived from properties.
+ * §12.1 — appearance derived from properties.
  *
  *   "One shader family, applied to every entity in the game, driving surface
  *    parameters from material properties. ... This is not a cosmetic decision.
@@ -7,7 +7,7 @@
  *    properties off its surface at a glance ... Non-negotiable."
  *
  * The design's table maps properties onto PBR channels for a real renderer.
- * M0 and M1 have no renderer — §15 says "no rendering beyond debug primitives"
+ * M0 and M1 have no renderer — §17 says "no rendering beyond debug primitives"
  * — so this module produces the same channels and then flattens them to
  * something a 2D canvas can draw. The derivation is what matters and it lives
  * here, in one pure function, so swapping in a material graph later is a change
@@ -15,13 +15,13 @@
  *
  * Nothing here reads a material *name*. A procedurally generated material and a
  * hand-authored one go through the identical path, which is the other half of
- * why §10.1 is called non-negotiable: it is what makes generated content look
+ * why §12.1 is called non-negotiable: it is what makes generated content look
  * coherent with no art pass.
  */
 
 import type { MaterialDoc } from "./pack.ts";
 
-/** The §10.1 channel set, before it is flattened for a given renderer. */
+/** The §12.1 channel set, before it is flattened for a given renderer. */
 export interface Surface {
   /** Degrees. */
   hue: number;
@@ -39,7 +39,7 @@ export interface Surface {
   wear: number;
 }
 
-/** Per-class base hue. Taxonomy only, exactly as §4.2 says. */
+/** Per-class base hue. Taxonomy only, exactly as §6.2 says. */
 const CLASS_HUE: Record<string, number> = {
   mineral: 30,
   metal: 205,
@@ -125,7 +125,7 @@ export function strokeOf(s: Surface): string {
 /**
  * A short, honest description of what the surface is telling the player.
  *
- * §10.3: "Do not hide the numbers behind flavour text." This does the opposite
+ * §12.3: "Do not hide the numbers behind flavour text." This does the opposite
  * — it names which property each visible cue comes from, so the arena teaches
  * the mapping rather than assuming it.
  */

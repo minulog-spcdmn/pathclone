@@ -1,8 +1,8 @@
-//! The acceptance criteria of DESIGN.md §15 M0 and M1, as tests.
+//! The acceptance criteria of DESIGN.md §17 M0 and M1, as tests.
 //!
 //! These run against the same packed blobs the browser loads, so a change to
 //! `data/materials.json` can fail the build without anyone touching Rust —
-//! which is the point of §12.5. Run `node tools/pack.ts` first; the tests skip
+//! which is the point of §14.5. Run `node tools/pack.ts` first; the tests skip
 //! with a clear message rather than failing if the blobs are absent, because a
 //! missing build step is not a broken simulation.
 
@@ -41,7 +41,7 @@ macro_rules! sim_or_skip {
     };
 }
 
-/// §15 M1: "§4.4 ship gate passes — 20 distinct, useful, unanticipated tactical
+/// §17 M1: "§6.4 ship gate passes — 20 distinct, useful, unanticipated tactical
 /// outcomes ... If this fails, stop and fix the material table. Do not proceed."
 #[test]
 fn ship_gate_demonstrates_twenty_outcomes() {
@@ -50,7 +50,7 @@ fn ship_gate_demonstrates_twenty_outcomes() {
     assert_eq!(
         scenarios.len(),
         20,
-        "§4.4 asks for 20 demonstrated outcomes; the suite has {}",
+        "§6.4 asks for 20 demonstrated outcomes; the suite has {}",
         scenarios.len()
     );
 
@@ -72,7 +72,7 @@ fn ship_gate_demonstrates_twenty_outcomes() {
     );
 }
 
-/// §4.3: "Resolution must be order-independent: gather all impulses for a tick,
+/// §6.3: "Resolution must be order-independent: gather all impulses for a tick,
 /// then apply. Otherwise multiplayer desyncs and hit-order exploits appear."
 #[test]
 fn impulse_resolution_is_order_independent() {
@@ -146,7 +146,7 @@ fn impulse_resolution_is_order_independent() {
     }
 }
 
-/// §12.4 rule 6, natively. The cross-host half lives in `tools/determinism.ts`;
+/// §14.4 rule 9, natively. The cross-host half lives in `tools/determinism.ts`;
 /// this half catches a regression without needing a browser.
 #[test]
 fn the_soak_is_reproducible() {
@@ -165,7 +165,7 @@ fn the_soak_is_reproducible() {
     );
 }
 
-/// §4.3: "total energy must be conservative-or-lossy, never generative."
+/// §6.3: "total energy must be conservative-or-lossy, never generative."
 #[test]
 fn energy_is_never_generated() {
     let mut s = sim_or_skip!(3);
@@ -183,7 +183,7 @@ fn energy_is_never_generated() {
     );
 }
 
-/// §4.3 bounds cascades "to guarantee termination". A pathological arrangement
+/// §6.3 bounds cascades "to guarantee termination". A pathological arrangement
 /// — a dense cluster of highly conductive parts, massively overcharged — must
 /// still finish the tick.
 #[test]
@@ -268,7 +268,7 @@ fn a_rock_can_wield_a_sword() {
     assert!(hurt, "the target was untouched by a rock holding a sword");
 }
 
-/// §4.1: "if a system needs to know 'is this a player?', the system is designed
+/// §6.1: "if a system needs to know 'is this a player?', the system is designed
 /// wrong." A cheap structural check that no such branch has crept in.
 #[test]
 fn no_system_asks_what_kind_of_entity_it_is_looking_at() {
@@ -295,13 +295,13 @@ fn no_system_asks_what_kind_of_entity_it_is_looking_at() {
     }
     assert!(
         offenders.is_empty(),
-        "§4.1 forbids type-discriminating code in the substrate:\n{}",
+        "§6.1 forbids type-discriminating code in the substrate:\n{}",
         offenders.join("\n")
     );
 }
 
 // ---------------------------------------------------------------------------
-// §15 M1: "Basic forms and melee."
+// §17 M1: "Basic forms and melee."
 // ---------------------------------------------------------------------------
 
 use sim::ecs::{Agency, Locomotion};
@@ -396,7 +396,7 @@ fn a_swing_only_reaches_what_is_in_front_of_it() {
     );
 }
 
-/// A heavy weapon is slow because it is heavy — §6.1's derived swing rate,
+/// A heavy weapon is slow because it is heavy — §8.1's derived swing rate,
 /// spent as recovery.
 #[test]
 fn a_heavy_weapon_swings_less_often() {

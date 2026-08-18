@@ -1,6 +1,6 @@
 //! Hand-written C ABI over wasm.
 //!
-//! No `wasm-bindgen`, no `serde`, no build-time codegen — §12.1 makes
+//! No `wasm-bindgen`, no `serde`, no build-time codegen — §14.1 makes
 //! host-agnosticism a hard requirement and the cheapest way to keep that honest
 //! is for the crate to have no way of knowing a host exists. The host writes
 //! bytes into linear memory, calls a function, and reads bytes back.
@@ -159,7 +159,7 @@ pub extern "C" fn sim_stored_energy() -> i64 {
     with_sim(|s| s.stored_energy().raw())
 }
 
-/// §4.3's inequality, evaluated against a caller-supplied baseline.
+/// §6.3's inequality, evaluated against a caller-supplied baseline.
 ///
 /// Returns `stored - (baseline + injected + released - absorbed - dissipated)`.
 /// Anything meaningfully positive means the simulation invented energy, which
@@ -274,7 +274,7 @@ pub extern "C" fn sim_set_effectors(entity: u32, strength: i64, wielded: i64) {
     });
 }
 
-/// §4.1 `Locomotion`. Setting it is what makes an entity able to move at all.
+/// §6.1 `Locomotion`. Setting it is what makes an entity able to move at all.
 #[no_mangle]
 pub extern "C" fn sim_set_locomotion(entity: u32, max_speed: i64, accel: i64, mass_ref: i64) {
     with_sim(|s| {
@@ -289,11 +289,11 @@ pub extern "C" fn sim_set_locomotion(entity: u32, max_speed: i64, accel: i64, ma
     });
 }
 
-/// §4.1 `Agency` — the intent for this tick.
+/// §6.1 `Agency` — the intent for this tick.
 ///
-/// The host writes a keyboard into it; §8.3's utility evaluator will write
+/// The host writes a keyboard into it; §10.3's utility evaluator will write
 /// itself into the same struct at M4, and nothing between here and the resolver
-/// will be able to tell the difference. That is §4.1's rule about never asking
+/// will be able to tell the difference. That is §6.1's rule about never asking
 /// "is this a player?", enforced by there being no other way in.
 #[no_mangle]
 pub extern "C" fn sim_set_agency(entity: u32, dx: i64, dy: i64, facing: i64, want_strike: u32) {
@@ -461,7 +461,7 @@ fn put_i64(v: &mut Vec<u8>, x: i64) {
 
 /// Everything the renderer needs, in one buffer.
 ///
-/// Temperature is sent already derived, because §10.1 drives emissive colour
+/// Temperature is sent already derived, because §12.1 drives emissive colour
 /// from it and the host has no business re-deriving simulation quantities.
 #[no_mangle]
 pub extern "C" fn sim_snapshot() -> u32 {
@@ -507,7 +507,7 @@ pub extern "C" fn sim_snapshot() -> u32 {
     publish(bytes)
 }
 
-/// The §10.2 Readout feed: every record at or after `since_tick`.
+/// The §12.2 Readout feed: every record at or after `since_tick`.
 #[no_mangle]
 pub extern "C" fn sim_events(since_tick: u32) -> u32 {
     let bytes = with_sim(|s| {
@@ -535,7 +535,7 @@ pub extern "C" fn sim_clear_events() {
     with_sim(|s| s.events.clear());
 }
 
-/// `(entity, part)` state for the §10.2 Lens: the numbers, not a power score.
+/// `(entity, part)` state for the §12.2 Lens: the numbers, not a power score.
 #[no_mangle]
 pub extern "C" fn sim_part_temp(entity: u32, part: u32) -> i64 {
     with_sim(|s| match s.ecs.body.get(entity) {
@@ -562,7 +562,7 @@ pub extern "C" fn sim_part_field(entity: u32, part: u32, field: u32) -> i64 {
             5 => p.attached as i64,
             // Latent energy banked toward a pending phase change, and which
             // change it is banked toward. The Readout shows this as a melting
-            // or freezing progress bar — §10.2 wants the player to see *why*
+            // or freezing progress bar — §12.2 wants the player to see *why*
             // the temperature stopped rising.
             6 => p.phase_progress.raw(),
             7 => p.phase_target as i64,
@@ -572,10 +572,10 @@ pub extern "C" fn sim_part_field(entity: u32, part: u32, field: u32) -> i64 {
 }
 
 // ---------------------------------------------------------------------------
-// Ship-gate scenarios (§4.4)
+// Ship-gate scenarios (§6.4)
 // ---------------------------------------------------------------------------
 
-/// Run the §12.4 determinism soak and return the resulting state hash.
+/// Run the §14.4 determinism soak and return the resulting state hash.
 #[no_mangle]
 pub extern "C" fn sim_soak(ticks: u32) -> i64 {
     with_sim(|s| {

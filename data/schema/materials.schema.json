@@ -2,21 +2,21 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.invalid/schema/materials.schema.json",
   "title": "Material table",
-  "description": "DESIGN.md §4.2. This file is the modding API described in §12.5 — 'a mod is a materials file' — so it is written as a public contract rather than an internal note. Every value is in game units, not SI: §3 lists physical accuracy as an explicit non-goal, and §4.2 asks only for monotonicity and consistent ratios.",
+  "description": "DESIGN.md §6.2. This file is the modding API described in §14.5 — 'a mod is a materials file' — so it is written as a public contract rather than an internal note. Every value is in game units, not SI: §3 lists physical accuracy as an explicit non-goal, and §6.2 asks only for monotonicity and consistent ratios.",
   "type": "object",
   "required": ["tags", "classes", "materials"],
   "additionalProperties": false,
   "properties": {
     "$comment": { "type": "string" },
     "tags": {
-      "description": "Role tags, in order. A material's index in this list is its bit, so appending is safe and reordering is not. Reactions match on these rather than on material identity, which is what keeps the interaction matrix authorable without an N² table (§4.2).",
+      "description": "Role tags, in order. A material's index in this list is its bit, so appending is safe and reordering is not. Reactions match on these rather than on material identity, which is what keeps the interaction matrix authorable without an N² table (§6.2).",
       "type": "array",
       "maxItems": 32,
       "uniqueItems": true,
       "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" }
     },
     "classes": {
-      "description": "Taxonomy only. §4.2: 'no mechanical effect'. Used for the base hue in §10.1 and for nothing else.",
+      "description": "Taxonomy only. §6.2: 'no mechanical effect'. Used for the base hue in §12.1 and for nothing else.",
       "type": "array",
       "uniqueItems": true,
       "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" }
@@ -67,7 +67,7 @@
           "maximum": 100
         },
         "toughness": {
-          "description": "Resistance to fracture. §4.2: hardness up / toughness down is the normal relationship, and a material that breaks it is automatically interesting and should be rare.",
+          "description": "Resistance to fracture. §6.2: hardness up / toughness down is the normal relationship, and a material that breaks it is automatically interesting and should be rare.",
           "$ref": "#/$defs/unit"
         },
         "elasticity": {
@@ -121,7 +121,7 @@
       }
     },
     "phaseTemps": {
-      "description": "Threshold temperatures. `melt`, `boil` and `ignite` are crossed on the way up; `solidify` is crossed on the way down and is this implementation's one addition to the §4.2 schema (without it nothing can freeze). Omit or null a transition a material does not have.",
+      "description": "Threshold temperatures. `melt`, `boil` and `ignite` are crossed on the way up; `solidify` is crossed on the way down and is this implementation's one addition to the §6.2 schema (without it nothing can freeze). Omit or null a transition a material does not have.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -182,7 +182,7 @@
       }
     },
     "formation": {
-      "description": "§5.1 layer 6: which conditions can produce this material. Carried through validation and deliberately not packed into the simulation — worldgen is M2, and §12.5 says not to foreclose it.",
+      "description": "§7.1 layer 6: which conditions can produce this material. Carried through validation and deliberately not packed into the simulation — worldgen is M2, and §14.5 says not to foreclose it.",
       "type": "object",
       "additionalProperties": false,
       "properties": {

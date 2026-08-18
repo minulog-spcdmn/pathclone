@@ -49,4 +49,4 @@ copyFileSync(artifact, destination);
 
 const kb = (statSync(destination).size / 1024).toFixed(1);
 console.log(`\n  public/sim.wasm  ${kb} kB`);
-console.log(`  (§12.2 budgets the whole initial download at 20 MB, so this is comfortable)\n`);
+console.log(`  (§14.2 budgets the whole initial download at 20 MB, so this is comfortable)\n`);

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.invalid/schema/arena.schema.json",
   "title": "Hand-made arena",
-  "description": "DESIGN.md §15 M1: 'Single-player, one small hand-made arena.' Hand-made, and made of data. There is no level format here beyond forms and materials placed at coordinates, because in a game with no content database that is all a place can be. Worldgen (§5) replaces this file at M2; until then it is the only authored place in the project.",
+  "description": "DESIGN.md §17 M1: 'Single-player, one small hand-made arena.' Hand-made, and made of data. There is no level format here beyond forms and materials placed at coordinates, because in a game with no content database that is all a place can be. Worldgen (§7) replaces this file at M2; until then it is the only authored place in the project.",
   "type": "object",
   "required": ["ambient_temp", "player", "rack", "props"],
   "additionalProperties": false,
@@ -10,7 +10,7 @@
     "$comment": { "type": "string" },
     "ambient_temp": { "type": "number" },
     "player": {
-      "description": "Not a player type. An entity with a Body, Effectors, Locomotion and Agency — §4.1 forbids anything else, and the only thing that makes it the player is that a keyboard writes its Agency.",
+      "description": "Not a player type. An entity with a Body, Effectors, Locomotion and Agency — §6.1 forbids anything else, and the only thing that makes it the player is that a keyboard writes its Agency.",
       "type": "object",
       "required": ["form", "materials", "at", "strength", "locomotion"],
       "additionalProperties": false,
@@ -37,7 +37,7 @@
       }
     },
     "rack": {
-      "description": "Weapons the arena hands you. Each is a form plus one material per slot; the difference between 'iron sword' and 'obsidian sword' is one string, which is §6.1's 'there is no item database' in practice.",
+      "description": "Weapons the arena hands you. Each is a form plus one material per slot; the difference between 'iron sword' and 'obsidian sword' is one string, which is §8.1's 'there is no item database' in practice.",
       "type": "array",
       "minItems": 1,
       "items": {

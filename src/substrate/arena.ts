@@ -1,23 +1,23 @@
 /**
- * The §15 M1 slice: "Basic forms and melee. Single-player, one small hand-made
- * arena. Readout panel (§10.2)."
+ * The §17 M1 slice: "Basic forms and melee. Single-player, one small hand-made
+ * arena. Readout panel (§12.2)."
  *
  * You are an entity with a `Body`, `Effectors`, `Locomotion` and `Agency`.
  * Nothing marks you as the player except that a keyboard writes your intent —
- * §4.1 forbids anything else, and at M4 a utility evaluator will write the same
+ * §6.1 forbids anything else, and at M4 a utility evaluator will write the same
  * struct for a wolf. You walk up to a dummy and hit it, and everything that
  * follows is `data/materials.json` meeting `sim/src/impulse.rs`.
  *
  * The three things on screen are all the design's own asks:
  *
- *   - §10.1's derivation colours every surface, so hardness, conductivity,
+ *   - §12.1's derivation colours every surface, so hardness, conductivity,
  *     permeability, heat and charge are legible before you open a panel;
- *   - §10.2's Readout prints what the resolver did, in physical quantities;
- *   - §4.4's twenty ship-gate outcomes are one click away, running the same code
+ *   - §12.2's Readout prints what the resolver did, in physical quantities;
+ *   - §6.4's twenty ship-gate outcomes are one click away, running the same code
  *     the CI gate runs.
  *
- * Rendering is 2D canvas on purpose. §15 M0 says "no rendering beyond debug
- * primitives", §17 leaves the renderer undecided, and §12.1 requires the choice
+ * Rendering is 2D canvas on purpose. §17 M0 says "no rendering beyond debug
+ * primitives", §19 leaves the renderer undecided, and §14.1 requires the choice
  * stay reversible — which it only does while nothing above the substrate
  * assumes one. Part positions come from the form's own geometry, not from here.
  */
@@ -100,7 +100,7 @@ const arena = arenaDoc as unknown as ArenaDoc;
 root.innerHTML = `
   <header class="bar">
     <h1>Substrate arena</h1>
-    <span class="spec">DESIGN.md §15 M1 — basic forms and melee</span>
+    <span class="spec">DESIGN.md §17 M1 — basic forms and melee</span>
     <div class="stats">
       <span>tick <b id="s-tick">0</b></span>
       <span>entities <b id="s-entities">0</b></span>
@@ -118,7 +118,7 @@ root.innerHTML = `
 
   <aside class="side">
     <section class="panel">
-      <h2>Loadout <span>§6.1 — derived, never stored</span></h2>
+      <h2>Loadout <span>§8.1 — derived, never stored</span></h2>
       <div class="panel-body">
         <div class="rack" id="rack"></div>
         <table class="props" id="weapon-stats"></table>
@@ -127,19 +127,19 @@ root.innerHTML = `
     </section>
 
     <section class="panel">
-      <h2>Lens <span>§10.2</span></h2>
+      <h2>Lens <span>§12.2</span></h2>
       <div class="panel-body" id="lens">
         <p class="empty">Nothing selected.</p>
       </div>
     </section>
 
     <section class="panel">
-      <h2>Readout <span>§10.2 — what the resolver did</span></h2>
+      <h2>Readout <span>§12.2 — what the resolver did</span></h2>
       <div class="readout" id="readout"></div>
     </section>
 
     <section class="panel">
-      <h2>Ship gate <span>§4.4 — 20 outcomes</span></h2>
+      <h2>Ship gate <span>§6.4 — 20 outcomes</span></h2>
       <div class="panel-body">
         <div class="row">
           <select id="scenario" class="grow"></select>
@@ -202,7 +202,7 @@ function buildArena() {
  *
  * The rack is data. Each entry is a form and one material per slot, and the
  * difference between "iron sword" and "obsidian sword" is one string — which is
- * the whole of §6.1's "there is no item database".
+ * the whole of §8.1's "there is no item database".
  */
 function equip(index: number) {
   equipped = ((index % arena.rack.length) + arena.rack.length) % arena.rack.length;
@@ -260,7 +260,7 @@ function collectEvents() {
 
 function stepWorld() {
   if (!inScenario) {
-    // Intent first: §4.1's Agency is written once per tick, and the simulation
+    // Intent first: §6.1's Agency is written once per tick, and the simulation
     // decides what that becomes.
     let dx = 0;
     let dy = 0;
@@ -309,7 +309,7 @@ window.addEventListener("resize", resize);
 /**
  * Lay a body out from its form's geometry.
  *
- * §6.1 calls a form "rules about shape", and the offsets in `forms.json` are
+ * §8.1 calls a form "rules about shape", and the offsets in `forms.json` are
  * that shape. The renderer rotates them by the entity's facing and does not
  * invent anything: a form with no offsets stacks at the origin, which is
  * correct for a boulder.
@@ -597,10 +597,10 @@ function renderRack() {
 }
 
 /**
- * §6.1: "All statistics are derived, none are stored."
+ * §8.1: "All statistics are derived, none are stored."
  *
  * Every number below is computed from the form's geometry and the materials in
- * its slots, at the moment it is displayed. §10.3 forbids a DPS number or a
+ * its slots, at the moment it is displayed. §12.3 forbids a DPS number or a
  * power score, so there is not one — just the physics the player can reason
  * from.
  */
@@ -738,7 +738,7 @@ function describe(e: ReadoutEvent): string {
 function renderReadout() {
   const host = $("readout");
   if (events.length === 0) {
-    host.innerHTML = `<div class="panel-body"><p class="empty">Nothing has happened yet. Walk up to a dummy and swing — every line here is a physical quantity the resolver produced, never a damage number (§10.3).</p></div>`;
+    host.innerHTML = `<div class="panel-body"><p class="empty">Nothing has happened yet. Walk up to a dummy and swing — every line here is a physical quantity the resolver produced, never a damage number (§12.3).</p></div>`;
     return;
   }
   host.innerHTML = events
@@ -880,7 +880,7 @@ $("run-all").addEventListener("click", () => {
   $("note").innerHTML =
     `<span class="verdict ${passed === scenarios.length ? "pass" : "fail"}">${passed} / ${scenarios.length} held</span> ` +
     `run from the same code the CI gate runs.`;
-  $("claim").textContent = "§4.4: twenty distinct tactical outcomes, none of them implemented.";
+  $("claim").textContent = "§6.4: twenty distinct tactical outcomes, none of them implemented.";
 });
 
 $("restore").addEventListener("click", () => {
@@ -900,13 +900,13 @@ buildArena();
 renderLens();
 canvas.focus();
 
-const TICK_MS = 1000 * rulesDoc.dt; // §11.2 — 20 Hz.
+const TICK_MS = 1000 * rulesDoc.dt; // §13.2 — 20 Hz.
 let accumulator = 0;
 let last = performance.now();
 let paintedTick = -1;
 
 function frame(now: number) {
-  // Fixed-step simulation, uncapped render (§11.2). The clamp stops a
+  // Fixed-step simulation, uncapped render (§13.2). The clamp stops a
   // backgrounded tab from trying to catch up on thousands of ticks at once.
   accumulator = Math.min(accumulator + (now - last), TICK_MS * 6);
   last = now;

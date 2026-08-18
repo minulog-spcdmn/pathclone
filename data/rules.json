@@ -1,5 +1,5 @@
 {
-  "$comment": "The hand-authored rules of DESIGN.md §0 — 'as few as possible, and hand-authored with extreme care'. §13's balance philosophy points here first: when something is overpowered the fix is a coefficient in this file or a property in materials.json, never a special case in the resolver. Nothing in this file names a material, an item or a creature.",
+  "$comment": "The hand-authored rules of DESIGN.md §0 — 'as few as possible, and hand-authored with extreme care'. §15's balance philosophy points here first: when something is overpowered the fix is a coefficient in this file or a property in materials.json, never a special case in the resolver. Nothing in this file names a material, an item or a creature.",
 
   "ambient_temp": 20.0,
   "reference_temp": 20.0,

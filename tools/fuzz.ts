@@ -1,10 +1,10 @@
 /**
- * The material fuzzer of §13.
+ * The material fuzzer of §15.
  *
  *   "Material property fuzzer — searches for degenerate reaction loops and
  *    energy-generating cascades."
  *
- * §4.3 names energy-generating loops as "the #1 exploit vector in this design",
+ * §6.3 names energy-generating loops as "the #1 exploit vector in this design",
  * and the honest way to close that is not an assertion that fires when someone
  * happens to be looking — it is to decide the question. Every phase transition
  * and every reaction is an edge in a directed graph over materials, each
@@ -14,9 +14,9 @@
  *
  * It also reports two things the design asks a human to watch:
  *
- *   - §4.2's hardness/toughness anticorrelation, and which rows break it
+ *   - §6.2's hardness/toughness anticorrelation, and which rows break it
  *     deliberately;
- *   - materials that are strictly dominated on every axis, which is §13's
+ *   - materials that are strictly dominated on every axis, which is §15's
  *     usage-concentration defect one level down: a row nobody will ever pick is
  *     dead content in a game that has no content.
  *
@@ -228,7 +228,7 @@ for (let a = 0; a < arenaCount; a++) {
   }
   // The sim's own ledger is authoritative: released chemical energy is
   // legitimate and has to be on the accounted side, which is exactly what
-  // §4.3's inequality says.
+  // §6.3's inequality says.
   const surplus = sim.auditExcess(baseline);
   void injected;
   if (surplus > worstSurplus) {
@@ -237,7 +237,7 @@ for (let a = 0; a < arenaCount; a++) {
   }
 }
 
-// §4.3: "total system energy after resolution <= energy before + injected".
+// §6.3: "total system energy after resolution <= energy before + injected".
 // Fixed-point rounding accumulates across thousands of part updates, so the
 // bound is a small constant rather than zero; what matters is that it does not
 // scale with how much happened.
@@ -253,7 +253,7 @@ if (worstSurplus > RUNTIME_BOUND) {
 
 // --- property space ---------------------------------------------------------
 
-heading("property space (§4.2)");
+heading("property space (§6.2)");
 
 const solid = materials.filter((m) => m.hardness > 0);
 const meanH = solid.reduce((s, m) => s + m.hardness, 0) / solid.length;
@@ -266,24 +266,24 @@ const correlation = cov / (sdH * sdT);
 
 console.log(
   `  hardness vs toughness correlation: ${num(correlation, 3)} ` +
-    dim("(§4.2 wants this negative — hard and brittle is the norm)"),
+    dim("(§6.2 wants this negative — hard and brittle is the norm)"),
 );
 if (correlation > -0.1) {
   failures.push(
     `hardness and toughness are not anticorrelated (r = ${num(correlation, 3)}); ` +
-      `§4.2 calls that relationship the normal one, with outliers rare`,
+      `§6.2 calls that relationship the normal one, with outliers rare`,
   );
 }
 
 const outliers = solid.filter((m) => m.hardness > meanH + sdH && m.toughness > meanT + sdT);
 console.log(
   `  deliberate outliers: ${outliers.length ? cyan(outliers.map((m) => m.id).join(", ")) : dim("none")}` +
-    dim(" — these are §5.4's anomalies, and they should stay rare"),
+    dim(" — these are §7.4's anomalies, and they should stay rare"),
 );
 for (const m of outliers) {
   const abundance = m.formation?.abundance;
   if (typeof abundance === "number" && abundance > 0.02) {
-    failures.push(`${m.id} breaks the correlation but has abundance ${abundance}; §5.4 wants outliers rare`);
+    failures.push(`${m.id} breaks the correlation but has abundance ${abundance}; §7.4 wants outliers rare`);
   }
 }
 
@@ -335,7 +335,7 @@ if (failures.length === 0) {
   for (const f of failures) console.log(`  ${red("✗")} ${f}`);
   console.log(
     red(
-      `\n  §13: "when something is overpowered, the correct fix is almost always to adjust\n` +
+      `\n  §15: "when something is overpowered, the correct fix is almost always to adjust\n` +
         `  a coefficient in a derivation or a property in the material table — never to add\n` +
         `  a special case."\n`,
     ),

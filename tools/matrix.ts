@@ -1,5 +1,5 @@
 /**
- * The §4.4 spreadsheet, executable.
+ * The §6.4 spreadsheet, executable.
  *
  * "Concretely, the design team's core artifact is not a document — it is a
  * spreadsheet of ~40 materials x ~8 property axes, plus a tag-reaction table,
@@ -123,7 +123,7 @@ function stripLen(s: string) {
   return s.replace(/\x1b\[[0-9;]*m/g, "").length;
 }
 
-heading("derived weapon statistics (§6.1 — none of these are stored)");
+heading("derived weapon statistics (§8.1 — none of these are stored)");
 console.log(
   "  " +
     ["weapon", "mass", "vel", "kinetic", "area", "swings/s"].map((h) => h.padEnd(14)).join(""),
@@ -160,7 +160,7 @@ for (const weapon of weapons) {
 }
 
 heading("property space");
-console.log(dim("  hardness vs toughness — the axis pair §4.2 says should usually anticorrelate"));
+console.log(dim("  hardness vs toughness — the axis pair §6.2 says should usually anticorrelate"));
 const rows = sim.materials.docs
   .filter((m) => m.hardness > 0)
   .sort((a, b) => b.hardness - a.hardness);

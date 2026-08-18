@@ -1,16 +1,19 @@
 /**
  * JSON data files -> the packed blobs the simulation crate decodes.
  *
- * DESIGN.md §12.5 wants every non-code definition to be a schema-validated data
+ * DESIGN.md §14.5 wants every non-code definition to be a schema-validated data
  * file, and wants that format designed as a public modding API from day one.
  * This module is the only place in the project where a design value becomes a
  * simulation value, which is what keeps that promise checkable: if a mod can
  * produce `materials.json`, it can produce a material, and nothing else in the
  * codebase needs to know.
  *
- * It is also the only place a float touches simulation data. §12.4 rule 1 bans
- * floating point *inside* the simulation; authoring in decimal and converting
- * once, deterministically, at the boundary is the point of having a boundary.
+ * It is also the only place a float touches simulation data. The crate is
+ * fixed-point throughout (§14.4 rule 3, and `docs/PROFILE.md` for why that is
+ * still the right call after v1.0 reopened the question); authoring in decimal
+ * and converting once, deterministically, at the boundary is the point of
+ * having a boundary. A designer writes 0.72 and every host reads the same
+ * integer.
  */
 
 const ONE = 2 ** 32;
@@ -143,7 +146,7 @@ const MATERIAL_VERSION = 1;
 
 /**
  * Everything the host needs that the simulation does not: names, tag bits, and
- * the raw property values behind §10.2's Lens and §10.1's shading.
+ * the raw property values behind §12.2's Lens and §12.1's shading.
  */
 export interface MaterialIndex {
   byName: Map<string, number>;

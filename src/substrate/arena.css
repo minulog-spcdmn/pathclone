@@ -1,7 +1,7 @@
 /*
- * The bare test arena of DESIGN.md §4.4 and §15 M1.
+ * The bare test arena of DESIGN.md §6.4 and §17 M1.
  *
- * §10.3 sets the tone: "Do not display derived DPS, 'item level', or a power
+ * §12.3 sets the tone: "Do not display derived DPS, 'item level', or a power
  * score. Display physical properties. The reasoning is the gameplay." and
  * "This game's audience wants the numbers." So this is an instrument panel,
  * not a HUD — dense, monospaced, and unwilling to round anything away.

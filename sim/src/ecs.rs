@@ -1,4 +1,4 @@
-//! Strict ECS per §4.1.
+//! Strict ECS per §6.1.
 //!
 //! Entities are integer ids. There is no `Player` type, no `Enemy` type, no
 //! `Item` type — those are component compositions, and any entity can acquire
@@ -6,7 +6,7 @@
 //! type-agnostic: adding `Metabolism`, `Sensors` or `Agency` in a later
 //! milestone means adding a field, not a code path.
 //!
-//! §12.4 rule 3 forbids hash maps in simulation code. Every store here is a
+//! §14.4 rule 6 forbids hash maps in simulation code. Every store here is a
 //! dense `Vec` indexed by entity id and every iterator walks it in index order,
 //! so traversal order is a function of the ids alone.
 
@@ -16,7 +16,7 @@ use crate::rng::Rng;
 
 pub type EntityId = u32;
 
-/// A 3-vector in fixed point. World coordinates are Q32.32 per §4.1.
+/// A 3-vector in fixed point. World coordinates are Q32.32 per §6.1.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct V3 {
     pub x: Fx,
@@ -64,11 +64,11 @@ impl V3 {
 pub struct Transform {
     pub position: V3,
     pub velocity: V3,
-    /// Yaw only at M1; the arena is flat (§15 M0).
+    /// Yaw only at M1; the arena is flat (§17 M0).
     pub orientation: Fx,
 }
 
-/// §4.1 `Effectors` — "what this entity can *do*".
+/// §6.1 `Effectors` — "what this entity can *do*".
 ///
 /// Note there is nothing player-shaped about it. Give it to a boulder and the
 /// boulder swings a sword, which is exactly the P1 test.
@@ -76,13 +76,13 @@ pub struct Transform {
 pub struct Effectors {
     pub strength: Fx,
     pub wielded: Option<EntityId>,
-    /// Seconds left before another swing can start. Set from §6.1's derived
+    /// Seconds left before another swing can start. Set from §8.1's derived
     /// swing rate, so a heavy weapon is slow because it is heavy and not
     /// because a number somewhere says "slow".
     pub recovery: Fx,
 }
 
-/// §4.1 `Locomotion` — "mode(s), speed curves, terrain affinity".
+/// §6.1 `Locomotion` — "mode(s), speed curves, terrain affinity".
 ///
 /// Terrain affinity waits for terrain. What exists at M1 is the part that
 /// couples to the rest of the substrate: top speed falls as the entity gets
@@ -97,10 +97,10 @@ pub struct Locomotion {
     pub mass_ref: Fx,
 }
 
-/// §4.1 `Agency` — "goal stack, utility evaluator config, memory".
+/// §6.1 `Agency` — "goal stack, utility evaluator config, memory".
 ///
-/// At M1 there is no utility AI (§8.3 is M4), so this holds only the intent a
-/// controller has expressed this tick. The point is which controller: §4.1 is
+/// At M1 there is no utility AI (§10.3 is M4), so this holds only the intent a
+/// controller has expressed this tick. The point is which controller: §6.1 is
 /// explicit that a system must never ask "is this a player?", only whether an
 /// entity "has `Agency` with an external controller". The player is an entity
 /// whose intent arrives from a keyboard; a wolf will be an entity whose intent
@@ -190,7 +190,7 @@ pub struct Ecs {
     pub effectors: ComponentStore<Effectors>,
     pub locomotion: ComponentStore<Locomotion>,
     pub agency: ComponentStore<Agency>,
-    /// Per-entity PRNG (§12.4 rule 4).
+    /// Per-entity PRNG (§14.4 rule 7).
     pub rng: ComponentStore<Rng>,
     /// An opaque host-side name handle. Inert — never branched on, never used
     /// to decide anything. It exists so the Readout can say "boarhide grip"

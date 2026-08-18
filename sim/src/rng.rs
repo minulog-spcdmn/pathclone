@@ -1,4 +1,4 @@
-//! Seeded PRNG, one per entity (§12.4 rule 4 — never a global RNG).
+//! Seeded PRNG, one per entity (§14.4 rule 7 — never a global RNG).
 //!
 //! PCG-XSH-RR 64/32. Every operation is wrapping, so it behaves identically
 //! with `overflow-checks` on or off, and it carries its own stream selector so

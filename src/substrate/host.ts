@@ -1,7 +1,7 @@
 /**
  * Host wrapper around the simulation module.
  *
- * DESIGN.md §11.1 and §12.1: the client is a renderer and an input device, and
+ * DESIGN.md §13.1 and §14.1: the client is a renderer and an input device, and
  * the simulation crate knows nothing about either. This file is the entire
  * surface between them. It runs unchanged in a browser tab and in Node, which
  * is what makes `tools/determinism.ts` a real cross-host test rather than a
@@ -177,7 +177,7 @@ export class Substrate {
   }
 
   static async create(wasm: BufferSource, data: DataFiles, seed = 1n): Promise<Substrate> {
-    // No imports: the module is closed over its own arithmetic (§12.4 rule 2).
+    // No imports: the module is closed over its own arithmetic (§14.4 rule 2).
     const { instance } = await WebAssembly.instantiate(wasm, {});
     const ex = instance.exports as unknown as Exports;
     const s = new Substrate(ex, data);
@@ -270,7 +270,7 @@ export class Substrate {
   }
 
   /**
-   * §4.3's energy inequality, measured against a baseline taken earlier.
+   * §6.3's energy inequality, measured against a baseline taken earlier.
    * Positive means the simulation produced energy from nothing.
    */
   auditExcess(baseline: number): number {
@@ -328,16 +328,16 @@ export class Substrate {
     this.ex.sim_set_effectors(entity, toFx(strength), BigInt(wielded ?? -1));
   }
 
-  /** §4.1 `Locomotion`. Without it an entity cannot move at all. */
+  /** §6.1 `Locomotion`. Without it an entity cannot move at all. */
   setLocomotion(entity: number, maxSpeed: number, accel: number, massRef: number) {
     this.ex.sim_set_locomotion(entity, toFx(maxSpeed), toFx(accel), toFx(massRef));
   }
 
   /**
-   * §4.1 `Agency` — this tick's intent.
+   * §6.1 `Agency` — this tick's intent.
    *
-   * A keyboard writes it here; §8.3's utility evaluator will write the same
-   * struct at M4. Nothing downstream can tell which, which is §4.1's rule about
+   * A keyboard writes it here; §10.3's utility evaluator will write the same
+   * struct at M4. Nothing downstream can tell which, which is §6.1's rule about
    * never asking "is this a player?" enforced by there being no other way in.
    */
   setAgency(entity: number, moveX: number, moveY: number, facing: number, wantStrike: boolean) {
@@ -357,7 +357,7 @@ export class Substrate {
     return fromFx(this.ex.sim_entity_field(entity, 2));
   }
 
-  /** Reach of whatever the entity is wielding, derived from the form (§6.1). */
+  /** Reach of whatever the entity is wielding, derived from the form (§8.1). */
   reachOf(entity: number): number {
     return fromFx(this.ex.sim_entity_field(entity, 3));
   }
@@ -426,7 +426,7 @@ export class Substrate {
     return this.ex.sim_part_field(entity, part, 5) !== 0n;
   }
 
-  /** Latent energy banked toward a pending phase change (§10.2's Readout). */
+  /** Latent energy banked toward a pending phase change (§12.2's Readout). */
   partPhaseProgress(entity: number, part: number): number {
     return fromFx(this.ex.sim_part_field(entity, part, 6));
   }
@@ -523,7 +523,7 @@ export class Substrate {
   }
 
   /**
-   * Run the §12.4 determinism soak and return the resulting state hash.
+   * Run the §14.4 determinism soak and return the resulting state hash.
    *
    * Unlike a scenario this continues the current world, so calling it
    * repeatedly produces a checkpoint sequence rather than independent runs.
@@ -532,7 +532,7 @@ export class Substrate {
     return BigInt.asUintN(64, this.ex.sim_soak(ticks));
   }
 
-  /** Runs one §4.4 scenario from a clean world and reports what happened. */
+  /** Runs one §6.4 scenario from a clean world and reports what happened. */
   runScenario(index: number): { passed: boolean; note: string } {
     const passed = this.ex.sim_scenario_run(index) !== 0;
     return { passed, note: this.readOutString(this.ex.sim_out_ptr()) };

@@ -1,9 +1,25 @@
 //! Q32.32 fixed-point arithmetic and in-crate transcendentals.
 //!
-//! DESIGN.md §12.4 rule 1 forbids floating point anywhere in simulation math,
-//! and rule 2 forbids calling the platform's `sin`/`cos`/`exp`/`sqrt`/`pow`
-//! because those are not specified identically across WASM runtimes and libm
-//! versions. Everything either rule needs lives in this file.
+//! DESIGN.md §14.4 rule 2 forbids calling the platform's `sin`/`cos`/`exp`/
+//! `pow`/`ln`, because libm is not specified bit-exactly and varies by version.
+//! Those have to be ours wherever they are called from, and they are, below.
+//!
+//! **The arithmetic underneath them is a choice, and v1.0 of the document
+//! reopened it.** The earlier version mandated fixed point for all simulation
+//! math on the grounds that floats are non-deterministic; §14.4 rule 1 now
+//! corrects that — WASM mandates IEEE 754-2019 semantics for add, subtract,
+//! multiply, divide and `sqrt`, so the same binary produces bit-identical
+//! results across conforming runtimes, and rule 3 narrows fixed point to "where
+//! drift matters, not everywhere". Rule 5 says to settle it by profiling rather
+//! than by argument, and `docs/PROFILE.md` records that measurement: on this
+//! resolver, at this entity count, Q32.32 clears the §14.2 tick budget with
+//! room to spare, so the crate stays integer end to end and the boundary rule 3
+//! asks to document is *there is no boundary*. Revisit it when the profile says
+//! to, not before.
+//!
+//! What that buys, beyond the budget number, is that `state_hash` covers every
+//! quantity in the world with no canonicalisation step: rule 2's NaN payload
+//! problem cannot arise in a type that has no NaN.
 //!
 //! Three properties matter more than accuracy here:
 //!
@@ -114,7 +130,7 @@ impl Fx {
         Fx(self.0 - (self.floor_int() << FRAC_BITS))
     }
 
-    /// **Presentation only.** Never call this from simulation code — §12.4
+    /// **Presentation only.** Never call this from simulation code — §14.4
     /// rule 1. It exists so hosts can draw numbers on a screen.
     #[inline]
     pub fn to_f64_lossy(self) -> f64 {
@@ -240,7 +256,7 @@ impl IntoFx for i64 {
 }
 
 // ---------------------------------------------------------------------------
-// Transcendentals (§12.4 rule 2 — these must be ours, not the platform's)
+// Transcendentals (§14.4 rule 2 — these must be ours, not the platform's)
 // ---------------------------------------------------------------------------
 
 /// Integer square root, bit-by-bit. No floats, no loops of unbounded length.
@@ -357,7 +373,7 @@ impl Fx {
 
     /// `self ^ exponent`. Defined for positive bases only; `<= 0` returns zero.
     ///
-    /// This is what §7.2's superlinear cost model is built on, so it has to be
+    /// This is what §9.2's superlinear cost model is built on, so it has to be
     /// deterministic before the cost model exists.
     pub fn pow(self, exponent: Fx) -> Fx {
         if self.0 <= 0 {
@@ -503,7 +519,7 @@ mod tests {
 
     #[test]
     fn pow_matches_reference() {
-        // alpha = 1.4 is §7.2's starting exponent, so it gets an explicit case.
+        // alpha = 1.4 is §9.2's starting exponent, so it gets an explicit case.
         let alpha = Fx::from_ratio(14, 10);
         for base in [0.5f64, 1.0, 2.0, 3.0, 10.0] {
             let b = Fx((base * ONE_RAW as f64).round() as i64);

@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import { resolve } from "node:path";
 
 /**
- * DESIGN.md §12.2 makes the header strategy an M0 decision, not an M5
+ * DESIGN.md §14.2 makes the header strategy an M0 decision, not an M5
  * discovery:
  *
  *   "Use SharedArrayBuffer for zero-copy state transfer — note this requires
@@ -14,7 +14,7 @@ import { resolve } from "node:path";
  * writing down: with `require-corp` in force, nothing cross-origin loads unless
  * it opts in with CORP or CORS headers. No CDN fonts, no third-party analytics,
  * no embedded widgets, and the page cannot be framed by an ordinary site. That
- * is the price of `SharedArrayBuffer`, and §12.2's threading plan needs it.
+ * is the price of `SharedArrayBuffer`, and §14.2's threading plan needs it.
  *
  * These headers must be reproduced by whatever actually serves the built files
  * in production; a static host that cannot set them will silently cost the

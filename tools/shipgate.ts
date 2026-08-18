@@ -1,11 +1,11 @@
 /**
- * The §4.4 ship gate, as a build step.
+ * The §6.4 ship gate, as a build step.
  *
  *   "Before any content work begins, the team must be able to demonstrate 20
  *    distinct, useful, unanticipated tactical outcomes produced solely by the
  *    material table and the impulse resolver in a bare test arena."
  *
- * §15 M1 is blunt about what happens if this fails: "stop and fix the material
+ * §17 M1 is blunt about what happens if this fails: "stop and fix the material
  * table. Do not proceed." So it exits non-zero, and it is meant to be the thing
  * that blocks the branch — not a report someone reads later.
  *
@@ -19,7 +19,7 @@ const verbose = process.argv.includes("--verbose");
 const sim = await createSubstrate();
 const scenarios = sim.scenarios();
 
-heading(`§4.4 ship gate — ${scenarios.length} tactical outcomes`);
+heading(`§6.4 ship gate — ${scenarios.length} tactical outcomes`);
 console.log(
   dim(
     "  Each row is a claim about play, checked against a bare arena.\n" +
@@ -62,7 +62,7 @@ if (failures.length) {
 if (passed < required) {
   console.log(
     red(
-      `\n  GATE CLOSED. §15 M1: "If this fails, stop and fix the material table. Do not proceed."\n` +
+      `\n  GATE CLOSED. §17 M1: "If this fails, stop and fix the material table. Do not proceed."\n` +
         `  ${required} outcomes are required; ${passed} were demonstrated.\n`,
     ),
   );

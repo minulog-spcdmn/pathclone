@@ -1,5 +1,5 @@
 /**
- * §12.4 rule 6, the desync test.
+ * §14.4 rule 9, the desync test.
  *
  *   "CI desync test: run 10,000 ticks of a seeded scenario on server and client
  *    builds, assert identical state hashes. This test runs on every commit. If
@@ -7,7 +7,7 @@
  *
  * The two hosts here are genuinely different: wasm32 under a JavaScript engine,
  * and x86-64 native. Different code generators, different register allocation,
- * different everything except the arithmetic — which is the point. §12.4 rule 2
+ * different everything except the arithmetic — which is the point. §14.4 rule 2
  * calls platform transcendentals "the single most common source of
  * cross-platform desync"; this run exercises `sqrt` on every distance test in
  * the soak, so a divergent one shows up here in seconds.
@@ -109,7 +109,7 @@ if (diverged !== null) {
   console.log(
     red(
       `\n  DESYNC. The two hosts first disagree somewhere in the ${stride} ticks before ${diverged}.\n` +
-        `  §12.4: "If it goes red, nothing else ships." Check the six rules — the usual\n` +
+        `  §14.4: "If it goes red, nothing else ships." Check the six rules — the usual\n` +
         `  culprit is a platform transcendental or an iteration order that is not stable.\n`,
     ),
   );

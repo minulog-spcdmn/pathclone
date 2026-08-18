@@ -1,10 +1,10 @@
-//! The event stream behind §10.2's Readout.
+//! The event stream behind §12.2's Readout.
 //!
 //! "After any significant impulse resolution, a compact, optional post-hit
 //! panel: energy transferred, what deformed, what fractured, what reacted, what
 //! changed phase. This is the hypothesis-testing loop."
 //!
-//! §10.3 rules out DPS numbers and power scores, so every record here carries
+//! §12.3 rules out DPS numbers and power scores, so every record here carries
 //! the *physical* quantity that caused it — the stress that broke the part, the
 //! temperature it crossed, the volume that dissolved. The host formats; it
 //! never invents.
@@ -18,15 +18,15 @@ use crate::material::MaterialId;
 pub enum EventKind {
     /// Energy arrived. `a` = kinetic absorbed, `b` = peak stress.
     Impact = 0,
-    /// §4.3 step 2. `a` = integrity lost, `b` = stress vs. hardness.
+    /// §6.3 step 2. `a` = integrity lost, `b` = stress vs. hardness.
     Deformed = 1,
-    /// §4.3 step 3. `a` = peak stress, `b` = the threshold it beat.
+    /// §6.3 step 3. `a` = peak stress, `b` = the threshold it beat.
     Fractured = 2,
-    /// §4.3 step 5. `a` = temperature, `b` = threshold crossed.
+    /// §6.3 step 5. `a` = temperature, `b` = threshold crossed.
     PhaseChange = 3,
-    /// §4.3 step 7. `a` = volume converted, `b` = energy released.
+    /// §6.3 step 7. `a` = volume converted, `b` = energy released.
     Reacted = 4,
-    /// §4.3 step 6. `a` = charge moved, `b` = the threshold it beat.
+    /// §6.3 step 6. `a` = charge moved, `b` = the threshold it beat.
     Discharged = 5,
     /// A part left the world. `a` = volume at destruction.
     Destroyed = 6,
@@ -80,7 +80,7 @@ pub struct Event {
     pub part: u16,
     pub material_before: MaterialId,
     pub material_after: MaterialId,
-    /// Which cascade generation produced this (§4.3 bounds it at 3), or the
+    /// Which cascade generation produced this (§6.3 bounds it at 3), or the
     /// transition index for a phase change.
     pub detail: u8,
     pub a: Fx,

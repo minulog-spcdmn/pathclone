@@ -1,14 +1,14 @@
-//! L1 — Matter. §4.2.
+//! L1 — Matter. §6.2.
 //!
 //! "A material is a data record. There is no material *code*." That is enforced
 //! structurally here: this module contains no material names, no `match` on a
 //! material id, and no constants that mean anything about a specific substance.
 //! Every material in the game arrives through [`MaterialTable::decode`] from a
 //! blob the host built out of `data/materials.json`, which is the whole of
-//! §12.5's "no compiled-in content" requirement.
+//! §14.5's "no compiled-in content" requirement.
 //!
 //! Tag ids are likewise assigned by the host from the data files and appear
-//! here only as bits, so the reaction matching in §4.3 step 7 stays an N-way
+//! here only as bits, so the reaction matching in §6.3 step 7 stays an N-way
 //! bitmask test rather than the N² table the design warns about.
 
 use crate::fixed::Fx;
@@ -19,23 +19,23 @@ pub type TagSet = u32;
 /// Sentinel for "no material" — an empty socket, a fully consumed part.
 pub const NO_MATERIAL: MaterialId = u16::MAX;
 
-/// The three phase thresholds of §4.2, plus one addition.
+/// The three phase thresholds of §6.2, plus one addition.
 ///
 /// The published schema lists `melt`, `boil` and `ignite`, all of which are
 /// crossings on the way *up*. Nothing in it can express a substance getting
-/// colder, so water cannot become ice — and §4.3's worked example ("freezing an
+/// colder, so water cannot become ice — and §6.3's worked example ("freezing an
 /// elastic creature makes it brittle... falls out of elasticity, phase_points
 /// and step 3") requires exactly that. `solidify` is therefore a fourth
 /// threshold, crossed downward, with its own temperature and product.
 ///
-/// This is the only extension this implementation makes to the §4.2 material
+/// This is the only extension this implementation makes to the §6.2 material
 /// schema, and it is purely additive: a material that omits `solidify` behaves
 /// exactly as specified.
 ///
 /// Note that nothing stops a table author from writing `ice --melt--> water`
 /// and `water --solidify--> ice` at the same temperature, which would flip
-/// every tick forever. The engine does not forbid it. §13 makes that the
-/// material fuzzer's job — see [`MaterialTable::product_edges`] — because §13's
+/// every tick forever. The engine does not forbid it. §15 makes that the
+/// material fuzzer's job — see [`MaterialTable::product_edges`] — because §15's
 /// balance philosophy is to fix the table, never to special-case the resolver.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Transition {
@@ -142,7 +142,7 @@ impl Material {
     ///
     /// This is one of the very few hand-authored *rules* §0 allows, and it is
     /// uniform across every material — there is no per-material softening
-    /// curve. It is what makes §6.2's Deform process work (you heat the billet
+    /// curve. It is what makes §8.2's Deform process work (you heat the billet
     /// before you hit it) and it is why armour left in a fire stops protecting.
     /// Materials with no melt point are unaffected.
     pub fn hardness_at(&self, temp: Fx, reference_temp: Fx, soften_k: Fx) -> Fx {
@@ -363,7 +363,7 @@ impl MaterialTable {
     /// Every `(material, transition) -> product` and `(material, reaction) ->
     /// product` edge in the table.
     ///
-    /// §13 asks the material fuzzer to search for "degenerate reaction loops and
+    /// §15 asks the material fuzzer to search for "degenerate reaction loops and
     /// energy-generating cascades". A cascade can only be unbounded if the
     /// product graph has a cycle, so exposing the graph is enough to make that
     /// a decidable question rather than a play-testing hope.

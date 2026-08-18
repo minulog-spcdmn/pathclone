@@ -1,4 +1,4 @@
-//! L3 — Form. The `Body` component of §4.1: "assembly graph of parts, each part
+//! L3 — Form. The `Body` component of §6.1: "assembly graph of parts, each part
 //! → (form_id, material_id, volume, integrity)".
 //!
 //! A creature, a sword, a boulder and a campfire are all this struct. Nothing
@@ -14,13 +14,13 @@ pub struct Part {
     pub slot: u16,
     pub material: MaterialId,
     pub volume: Fx,
-    /// 1.0 pristine, 0.0 destroyed. §4.1's `Integrity` component lives on the
+    /// 1.0 pristine, 0.0 destroyed. §6.1's `Integrity` component lives on the
     /// part rather than beside it because damage is always local to a part.
     pub integrity: Fx,
     /// Thermal energy relative to 0 game-degrees. Temperature is derived
-    /// (§4.1: "stored heat, surface temp (derived)").
+    /// (§6.1: "stored heat, surface temp (derived)").
     pub heat: Fx,
-    /// §4.1 `Charge` — aetheric/electric, per part.
+    /// §6.1 `Charge` — aetheric/electric, per part.
     pub charge: Fx,
     /// Energy banked toward a pending phase change, signed: positive has been
     /// absorbed on the way up, negative given off on the way down.
@@ -28,13 +28,13 @@ pub struct Part {
     /// This is the latent-heat plateau. Without it a part flips the instant it
     /// touches a threshold, and because two materials either side of a
     /// transition have different heat capacities, a hysteresis loop between
-    /// them becomes a heat engine — an energy-generating cycle, which §4.3
+    /// them becomes a heat engine — an energy-generating cycle, which §6.3
     /// names as the #1 exploit vector in the whole design. With it, melting
     /// costs exactly what freezing gives back.
     pub phase_progress: Fx,
     /// Which transition the progress is banked toward, or [`NO_TRANSITION`].
     pub phase_target: u8,
-    /// Cleared when §4.3 step 3 fractures this part off the assembly.
+    /// Cleared when §6.3 step 3 fractures this part off the assembly.
     pub attached: bool,
 }
 
@@ -65,9 +65,9 @@ impl Part {
 pub struct Body {
     pub parts: Vec<Part>,
     /// Undirected adjacency, stored `(lo, hi)` and kept sorted so iteration
-    /// order never depends on insertion order (§12.4 rule 3).
+    /// order never depends on insertion order (§14.4 rule 6).
     pub links: Vec<(u16, u16)>,
-    /// Which §6.1 form this assembly was built from, or `u16::MAX`.
+    /// Which §8.1 form this assembly was built from, or `u16::MAX`.
     pub form: u16,
 }
 
@@ -180,7 +180,7 @@ impl Body {
         sum
     }
 
-    /// Sum of stored heat and charge over attached parts. Feeds the §4.3 energy
+    /// Sum of stored heat and charge over attached parts. Feeds the §6.3 energy
     /// audit.
     ///
     /// Latent energy banked in a part's phase plateau counts as heat: it is

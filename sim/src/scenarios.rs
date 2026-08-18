@@ -1,4 +1,4 @@
-//! The §4.4 ship gate.
+//! The §6.4 ship gate.
 //!
 //! > "Before any content work begins, the team must be able to demonstrate 20
 //! > distinct, useful, unanticipated tactical outcomes produced solely by the
@@ -7,7 +7,7 @@
 //! Twenty of them, executable. Each one sets up a bare arena, does something,
 //! and checks a claim about what happened, reporting the numbers it saw.
 //!
-//! The word doing the work in §4.4 is **unanticipated**. Nothing in this crate
+//! The word doing the work in §6.4 is **unanticipated**. Nothing in this crate
 //! implements freezing-then-shattering, chain lightning, fire spreading,
 //! armour softening in a fire, salt water as a weapon, or grinding an edge
 //! until the blade melts. Every one of those is `materials.json` meeting
@@ -212,7 +212,7 @@ fn freeze_then_shatter(sim: &mut Sim) -> Observation {
     let warm_loss = Fx::ONE.sub(integrity_of(sim, warm, 0));
 
     // Now chill an identical body well below its solidify point and hit it the
-    // same way. `Payload(thermal: -400)` is §7.1's own worked example.
+    // same way. `Payload(thermal: -400)` is §9.1's own worked example.
     let chilled = assemble!(sim, "plate_segment", ["flesh", "boarhide"], at(6, 0, 0));
     sim.inject(chilled, 0, Impulse::thermal(f(-400)));
     sim.run(1);
@@ -1032,7 +1032,7 @@ fn energy_is_never_created(sim: &mut Sim) -> Observation {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// The determinism soak (§12.4 rule 6)
+// The determinism soak (§14.4 rule 9)
 // ---------------------------------------------------------------------------
 
 /// A busy, seeded world driven for many ticks, used to fingerprint the

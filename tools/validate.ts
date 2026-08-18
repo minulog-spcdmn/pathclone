@@ -1,5 +1,5 @@
 /**
- * Schema validation for the data files (§12.5: "Schemas in JSON Schema;
+ * Schema validation for the data files (§14.5: "Schemas in JSON Schema;
  * validation in CI").
  *
  * This carries a small JSON Schema evaluator rather than a dependency, for the
@@ -198,7 +198,7 @@ const files: Array<[string, string]> = [
   ["data/arena.json", "data/schema/arena.schema.json"],
 ];
 
-heading("schema validation (§12.5)");
+heading("schema validation (§14.5)");
 
 let failed = 0;
 for (const [dataPath, schemaPath] of files) {
