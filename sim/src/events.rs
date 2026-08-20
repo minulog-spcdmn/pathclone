@@ -38,6 +38,22 @@ pub enum EventKind {
     /// `b` = the reach it had. A miss is worth printing: it tells the player the
     /// weapon's reach is a real number they can learn.
     Swung = 9,
+    /// §12.6, "margins, not states": a part is inside `margin_band` of a
+    /// threshold and has not crossed it. `detail` = which threshold (0 fracture,
+    /// 1 phase, 2 discharge), `a` = how close, 0–1, `b` = the threshold itself.
+    ///
+    /// This is the event that makes §6.3's design rule enforceable — "no binary
+    /// hidden threshold may determine a combat outcome" — because it is what a
+    /// player who "missed the fracture by 0.01" saw coming.
+    Nearing = 10,
+    /// §5.1: an attack committed to its windup. `a` = the windup, seconds,
+    /// `b` = the mass being swung, which is what set it.
+    Committed = 11,
+    /// §5.1: a dodge began. `a` = its duration, `b` = the i-frame window.
+    Dodged = 12,
+    /// A blow found a target inside its i-frames. `entity` is the one that
+    /// dodged, `a` = the energy it avoided.
+    Evaded = 13,
 }
 
 impl EventKind {
@@ -53,6 +69,10 @@ impl EventKind {
             EventKind::Spawned => "spawned",
             EventKind::Conducted => "conducted",
             EventKind::Swung => "swung",
+            EventKind::Nearing => "nearing",
+            EventKind::Committed => "committed",
+            EventKind::Dodged => "dodged",
+            EventKind::Evaded => "evaded",
         }
     }
 
@@ -67,6 +87,10 @@ impl EventKind {
             7 => EventKind::Spawned,
             8 => EventKind::Conducted,
             9 => EventKind::Swung,
+            10 => EventKind::Nearing,
+            11 => EventKind::Committed,
+            12 => EventKind::Dodged,
+            13 => EventKind::Evaded,
             _ => EventKind::Impact,
         }
     }

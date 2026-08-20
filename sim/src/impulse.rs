@@ -15,7 +15,7 @@
 //! * resolution is gather-then-apply and order-independent within a tick.
 
 use crate::body::{Body, Part};
-use crate::ecs::{EntityId, V3};
+use crate::ecs::{AttackPhase, EntityId, V3};
 use crate::events::{Event, EventKind};
 use crate::fixed::Fx;
 use crate::form::{derive_strike, StrikeProfile};
@@ -104,9 +104,13 @@ impl Impulse {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SwingOutcome {
     Hit { target: EntityId, part: u16 },
-    /// Nothing live inside reach and inside the arc.
+    /// Nothing live inside reach and inside the arc — or everything that was
+    /// there is inside its §5.1 i-frames.
     Missed,
-    /// The previous swing has not finished.
+    /// §5.1's windup has begun. Nothing has been resolved yet and nothing can
+    /// stop it now.
+    Committed,
+    /// The entity is mid-attack, or too early in its recovery to cancel it.
     Recovering,
     /// No `Effectors`, or nothing to swing.
     NoEffectors,
@@ -209,7 +213,7 @@ impl Sim {
                 Some(v) => v,
                 None => continue,
             };
-            let hardness = mat.hardness_at(temp, self.rules.reference_temp, self.rules.soften_k);
+            let hardness = self.part_hardness(p.target, p.part, &mat, temp);
 
             // §6.3 step 1. Elastic materials hand some of the energy back
             // instead of taking it.
@@ -289,6 +293,30 @@ impl Sim {
         Some((m, temp, p.volume))
     }
 
+    /// The hardness a part is actually offering right now: its material's, taken
+    /// down by temperature and again by however far into a melt it already is
+    /// (§6.3 step 5).
+    ///
+    /// Every mechanical decision reads hardness through here, so "a blade you
+    /// have been heating gets worse before it dies" applies to what it can cut,
+    /// what it can resist, and what a blow returns into it, without any of those
+    /// three knowing about phase change.
+    pub fn part_hardness(&self, e: EntityId, part: u16, mat: &Material, temp: Fx) -> Fx {
+        let fraction = self
+            .ecs
+            .body
+            .get(e)
+            .map(|b| b.phase_fraction(part as usize, &self.materials))
+            .unwrap_or(Fx::ZERO);
+        mat.hardness_softening(
+            temp,
+            self.rules.reference_temp,
+            self.rules.soften_k,
+            self.rules.phase_soften_k,
+            fraction,
+        )
+    }
+
     /// The seven steps, in order, for one part.
     ///
     /// One deliberate reordering against §6.3's numbering: incoming heat lands
@@ -302,7 +330,7 @@ impl Sim {
             Some(v) => v,
             None => return,
         };
-        let hardness = mat.hardness_at(temp, self.rules.reference_temp, self.rules.soften_k);
+        let hardness = self.part_hardness(acc.entity, acc.part, &mat, temp);
 
         // Captured before step 2 spends any of it. A blow decides whether it
         // breaks the part against the state it *met*, not against the state it
@@ -420,6 +448,38 @@ impl Sim {
                 self.fracture(acc.entity, acc.part, fragments);
                 // The part is gone. Nothing downstream can act on it.
                 return;
+            }
+
+            // It held — but by how much? §6.3's design rule: "no binary hidden
+            // threshold may determine a combat outcome ... A player who 'missed
+            // the fracture by 0.01' and got no feedback will correctly report a
+            // bug, and they will be right." The blow already did graded damage
+            // through step 2; this is the other half, the part the player needs
+            // in order to know that one more like it will do it.
+            let by_stress_ratio = acc.peak_stress.div(stress_threshold.max(Fx::EPSILON));
+            let by_blunt_ratio = acc.blunt_energy.div(blunt_threshold);
+            let closest = by_stress_ratio.max(by_blunt_ratio);
+            if closest >= self.rules.margin_band && acc.hits > 0 {
+                // Report against whichever route came nearer, so the number the
+                // player is told is the number that nearly happened.
+                let threshold = if by_stress_ratio >= by_blunt_ratio {
+                    stress_threshold
+                } else {
+                    blunt_threshold
+                };
+                let tick = self.tick;
+                let material = mat_of(self, acc.entity, acc.part);
+                self.events.push(Event {
+                    tick,
+                    kind: EventKind::Nearing,
+                    entity: acc.entity,
+                    part: acc.part,
+                    material_before: material,
+                    material_after: material,
+                    detail: 0,
+                    a: closest,
+                    b: threshold,
+                });
             }
         }
 
@@ -705,29 +765,38 @@ impl Sim {
     /// area — which is the entire mechanism behind "an ice weapon melts if you
     /// fight near lava. Then you're unarmed", and behind a quartz blade
     /// exploding against granite. Neither is implemented anywhere.
-    /// Swing at whatever is in front of the attacker.
+    /// How §5.1's three phases divide up one swing of this weapon.
     ///
-    /// §17 M1 asks for "basic forms and melee", and this is the whole of it.
-    /// Nothing here is a combat system: reach comes from the form's geometry,
-    /// the recovery between swings is one over §8.1's derived swing rate, and
-    /// the energy delivered is whatever [`derive_strike`] computes from the
-    /// materials that happen to be in the weapon. A heavy weapon is slow
-    /// because it is heavy.
-    ///
-    /// The intent is read from [`Agency`] rather than passed in, because §6.1
-    /// requires that a keyboard and a utility evaluator be indistinguishable
-    /// from here.
-    pub fn swing(&mut self, attacker: EntityId) -> SwingOutcome {
-        // One press, one attempt: the caller re-raises the flag each tick it
-        // wants another swing, and recovery decides how many of those land.
-        if let Some(a) = self.ecs.agency.get_mut(attacker) {
-            a.want_strike = false;
-        }
+    /// Windup and the active frames grow with the mass being swung and are
+    /// clamped into the document's bands; recovery is whatever is left of
+    /// §8.1's derived cycle, floored. So the bands hold for anything a person
+    /// would recognise as a weapon, and a player-crafted absurdity keeps its
+    /// absurd slowness in the one phase that can carry it — which is §5.1's
+    /// stated goal ("a player-crafted absurdly heavy maul feels absurdly heavy
+    /// with no tuning") reached without letting the windup grow past the point
+    /// where the swing stops reading as an attack at all.
+    pub fn swing_timing(&self, profile: &StrikeProfile) -> (Fx, Fx, Fx) {
+        let r = &self.rules;
+        let heft = profile.mass.mul(r.windup_mass_k);
+        let windup = r.windup_min.add(heft).clamp(r.windup_min, r.windup_max);
+        let active = r.active_min.add(heft).clamp(r.active_min, r.active_max);
+        let cycle = if profile.rate.is_positive() {
+            Fx::ONE.div(profile.rate)
+        } else {
+            Fx::ONE
+        };
+        let recovery = cycle.sub(windup).sub(active).max(r.recovery_min);
+        (windup, active, recovery)
+    }
+
+    /// Commit to a swing: §5.1's windup begins, and from here nothing can stop
+    /// it. Called by the effector pass when intent meets a legal phase.
+    pub fn begin_swing(&mut self, attacker: EntityId) -> SwingOutcome {
         let effectors = match self.ecs.effectors.get(attacker) {
             Some(f) => *f,
             None => return SwingOutcome::NoEffectors,
         };
-        if effectors.recovery.is_positive() {
+        if !effectors.can_act(self.rules.recovery_cancel) {
             return SwingOutcome::Recovering;
         }
         let weapon = effectors.wielded.unwrap_or(attacker);
@@ -736,17 +805,84 @@ impl Sim {
             None => return SwingOutcome::NoEffectors,
         };
         let profile = derive_strike(weapon_body, &self.forms, &self.materials, effectors.strength);
+        let (windup, _, _) = self.swing_timing(&profile);
+        if let Some(f) = self.ecs.effectors.get_mut(attacker) {
+            f.phase = AttackPhase::Windup;
+            f.phase_left = windup;
+            f.phase_total = windup;
+            f.buffered = Fx::ZERO;
+        }
+        let tick = self.tick;
+        self.events.push(Event {
+            tick,
+            kind: EventKind::Committed,
+            entity: attacker,
+            part: profile.strike_part,
+            material_before: NO_MATERIAL,
+            material_after: NO_MATERIAL,
+            detail: 0,
+            a: windup,
+            b: profile.mass,
+        });
+        SwingOutcome::Committed
+    }
 
-        // Swinging costs the same whether or not it connects. Missing has to be
-        // possible for reach to mean anything.
-        let recovery = if profile.rate.is_positive() {
-            Fx::ONE.div(profile.rate)
-        } else {
-            Fx::ONE
+    /// The windup is paid for. Enter the active frames and resolve the blow.
+    ///
+    /// The profile is derived again here rather than cached at commit time, and
+    /// that is deliberate: a blade that melted, shattered or was set on fire
+    /// during its own windup strikes with what it has become. Committing to a
+    /// swing commits you to the swing, not to the weapon you started it with.
+    pub fn enter_active(&mut self, attacker: EntityId) -> SwingOutcome {
+        let effectors = match self.ecs.effectors.get(attacker) {
+            Some(f) => *f,
+            None => return SwingOutcome::NoEffectors,
+        };
+        let weapon = effectors.wielded.unwrap_or(attacker);
+        let (active, recovery) = match self.ecs.body.get(weapon) {
+            Some(b) => {
+                let profile = derive_strike(b, &self.forms, &self.materials, effectors.strength);
+                let (_, active, recovery) = self.swing_timing(&profile);
+                (active, recovery)
+            }
+            None => (self.rules.active_min, self.rules.recovery_min),
         };
         if let Some(f) = self.ecs.effectors.get_mut(attacker) {
-            f.recovery = recovery;
+            f.phase = AttackPhase::Active;
+            f.phase_left = active;
+            // Parked here so the recovery length survives into the next
+            // transition without deriving the profile a third time.
+            f.phase_total = recovery;
         }
+        self.swing_now(attacker)
+    }
+
+    /// Resolve a swing against whatever is in front of the attacker, now.
+    ///
+    /// §17 M1 asks for "basic forms and melee", and this is the whole of it.
+    /// Nothing here is a combat system: reach comes from the form's geometry
+    /// and the energy delivered is whatever [`derive_strike`] computes from the
+    /// materials that happen to be in the weapon.
+    ///
+    /// This is the resolution step alone — §5.1's phases live in
+    /// [`Sim::effector_pass`], which calls this on the windup → active edge.
+    /// Calling it directly is how a test or a scenario asks "what would this
+    /// weapon do to that material", with no commitment model in the way.
+    ///
+    /// The intent is read from [`Agency`] rather than passed in, because §6.1
+    /// requires that a keyboard and a utility evaluator be indistinguishable
+    /// from here.
+    pub fn swing_now(&mut self, attacker: EntityId) -> SwingOutcome {
+        let effectors = match self.ecs.effectors.get(attacker) {
+            Some(f) => *f,
+            None => return SwingOutcome::NoEffectors,
+        };
+        let weapon = effectors.wielded.unwrap_or(attacker);
+        let weapon_body = match self.ecs.body.get(weapon) {
+            Some(b) => b,
+            None => return SwingOutcome::NoEffectors,
+        };
+        let profile = derive_strike(weapon_body, &self.forms, &self.materials, effectors.strength);
 
         let origin = self.position_of(attacker);
         let self_extent = self
@@ -765,6 +901,7 @@ impl Sim {
         let cone = self.rules.swing_arc.cos();
 
         let mut best: Option<(Fx, EntityId)> = None;
+        let mut evaded: Option<EntityId> = None;
         for candidate in self.ecs.body.ids() {
             if candidate == attacker || candidate == weapon {
                 continue;
@@ -795,6 +932,23 @@ impl Sim {
                     continue;
                 }
             }
+            // §5.1's i-frames. The blow passes through where the target was, so
+            // this belongs to melee targeting and never to the resolver: an
+            // impulse that reaches a `Body` still resolves the same way for
+            // everything in the world (P1). Any entity mid-dodge is skipped,
+            // wolf or player — nothing here knows the difference.
+            if let Some(f) = self.ecs.effectors.get(candidate) {
+                if f.evading(
+                    self.rules.dodge_iframe_from,
+                    self.rules.dodge_iframe_to,
+                    self.rules.dodge_time,
+                ) {
+                    if evaded.is_none() {
+                        evaded = Some(candidate);
+                    }
+                    continue;
+                }
+            }
             let better = match best {
                 None => true,
                 Some((d, id)) => distance < d || (distance == d && candidate < id),
@@ -808,6 +962,23 @@ impl Sim {
             Some((_, t)) => t,
             None => {
                 let tick = self.tick;
+                if let Some(dodger) = evaded {
+                    // Worth its own record: a miss that was *earned* is the one
+                    // piece of feedback the commitment model needs to teach
+                    // itself, and §12.6 asks for events to be legible without
+                    // text.
+                    self.events.push(Event {
+                        tick,
+                        kind: EventKind::Evaded,
+                        entity: dodger,
+                        part: 0,
+                        material_before: NO_MATERIAL,
+                        material_after: NO_MATERIAL,
+                        detail: 0,
+                        a: profile.kinetic,
+                        b: profile.reach,
+                    });
+                }
                 self.events.push(Event {
                     tick,
                     kind: EventKind::Swung,
@@ -881,14 +1052,13 @@ impl Sim {
         let profile = derive_strike(weapon_body, &self.forms, &self.materials, eff.strength);
 
         let (target_mat, target_temp, _) = self.part_state(target, target_part)?;
-        let target_hardness =
-            target_mat.hardness_at(target_temp, self.rules.reference_temp, self.rules.soften_k);
+        let target_hardness = self.part_hardness(target, target_part, &target_mat, target_temp);
 
         self.inject(target, target_part, profile.impulse());
 
         if let Some((strike_mat, strike_temp, _)) = self.part_state(weapon, profile.strike_part) {
             let strike_hardness =
-                strike_mat.hardness_at(strike_temp, self.rules.reference_temp, self.rules.soften_k);
+                self.part_hardness(weapon, profile.strike_part, &strike_mat, strike_temp);
             let denom = target_hardness.add(strike_hardness);
             let ratio = if denom.is_positive() {
                 target_hardness.div(denom)

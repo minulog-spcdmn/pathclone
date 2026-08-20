@@ -378,7 +378,7 @@ export function packForms(doc: FormsDoc): Uint8Array {
 // ---------------------------------------------------------------------------
 
 const RULES_MAGIC = 0x3130_4c52; // "RL01"
-const RULES_VERSION = 1;
+const RULES_VERSION = 2;
 
 /** Order must match `Rules::decode` in sim/src/sim.rs. */
 export const RULE_FIELDS = [
@@ -403,7 +403,22 @@ export const RULE_FIELDS = [
   "charge_energy_coeff",
   "flux_destabilise_k",
   "swing_arc",
+  "windup_min",
+  "windup_max",
+  "windup_mass_k",
+  "active_min",
+  "active_max",
+  "recovery_min",
+  "recovery_cancel",
+  "input_buffer",
+  "dodge_time",
+  "dodge_iframe_from",
+  "dodge_iframe_to",
+  "dodge_lockout",
+  "dodge_speed_k",
+  "margin_band",
   "soften_k",
+  "phase_soften_k",
   "reaction_k",
 ] as const;
 

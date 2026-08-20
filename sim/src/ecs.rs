@@ -68,18 +68,93 @@ pub struct Transform {
     pub orientation: Fx,
 }
 
+/// Where an attack is in §5.1's commitment model.
+///
+/// "ARPG combat feel comes from commitment: attacks cost time, and the player
+/// trades safety for damage." The phase an entity is in decides two things and
+/// nothing else: whether the blow resolves this tick, and whether the entity is
+/// allowed to move. How *long* each phase lasts is derived from the weapon
+/// (§5.1: "weapon mass drives windup and recovery, derived from §8.1").
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[repr(u8)]
+pub enum AttackPhase {
+    #[default]
+    Idle = 0,
+    /// Committed. Not cancellable, by anything — this is the commitment.
+    Windup = 1,
+    /// The blow resolves on the tick this begins.
+    Active = 2,
+    /// Cancellable after `recovery_cancel` of its length, by dodge or movement.
+    Recovery = 3,
+}
+
+impl AttackPhase {
+    pub fn from_u8(v: u8) -> AttackPhase {
+        match v {
+            1 => AttackPhase::Windup,
+            2 => AttackPhase::Active,
+            3 => AttackPhase::Recovery,
+            _ => AttackPhase::Idle,
+        }
+    }
+}
+
 /// §6.1 `Effectors` — "what this entity can *do*".
 ///
 /// Note there is nothing player-shaped about it. Give it to a boulder and the
-/// boulder swings a sword, which is exactly the P1 test.
+/// boulder swings a sword, which is exactly the P1 test. §5.1's phases inherit
+/// that: a wolf with `Effectors` commits to its attacks exactly as the player
+/// does, and can be dodged for the same reason.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Effectors {
     pub strength: Fx,
     pub wielded: Option<EntityId>,
-    /// Seconds left before another swing can start. Set from §8.1's derived
-    /// swing rate, so a heavy weapon is slow because it is heavy and not
-    /// because a number somewhere says "slow".
-    pub recovery: Fx,
+    /// Which §5.1 phase this entity is in.
+    pub phase: AttackPhase,
+    /// Seconds left in the current phase.
+    pub phase_left: Fx,
+    /// The length the current phase started with, so "cancellable after 40%" is
+    /// a question the effector pass can answer without a second timer.
+    pub phase_total: Fx,
+    /// §5.1's input buffer: seconds of validity left on a swing asked for while
+    /// the entity was busy. "Queued inputs during recovery fire on the first
+    /// legal frame. This single feature is responsible for most of the
+    /// difference between 'responsive' and 'sluggish' in this genre."
+    pub buffered: Fx,
+    /// Seconds left of a dodge.
+    pub dodge_left: Fx,
+    /// Seconds until another dodge is legal (§5.1's lockout).
+    pub dodge_lockout: Fx,
+    /// Where the dodge is carrying the entity, fixed when it starts — a dodge
+    /// you can steer mid-roll is not a commitment.
+    pub dodge_dir: V3,
+}
+
+impl Effectors {
+    /// §5.1's i-frames, "from 60–180 ms" of a 350 ms dodge. Held as fractions of
+    /// the dodge so the window survives retuning the duration.
+    pub fn evading(&self, from: Fx, to: Fx, dodge_time: Fx) -> bool {
+        if self.dodge_left <= Fx::ZERO || dodge_time <= Fx::ZERO {
+            return false;
+        }
+        let elapsed = dodge_time.sub(self.dodge_left);
+        elapsed >= dodge_time.mul(from) && elapsed <= dodge_time.mul(to)
+    }
+
+    /// Whether a new action may start. Committed phases refuse; recovery allows
+    /// it once `cancel` of it has elapsed.
+    pub fn can_act(&self, cancel: Fx) -> bool {
+        if self.dodge_left.is_positive() {
+            return false;
+        }
+        match self.phase {
+            AttackPhase::Idle => true,
+            AttackPhase::Windup | AttackPhase::Active => false,
+            AttackPhase::Recovery => {
+                self.phase_total.sub(self.phase_left) >= self.phase_total.mul(cancel)
+            }
+        }
+    }
 }
 
 /// §6.1 `Locomotion` — "mode(s), speed curves, terrain affinity".
@@ -112,8 +187,13 @@ pub struct Agency {
     pub move_dir: V3,
     /// Where the entity is looking, in radians.
     pub facing: Fx,
-    /// Raised to ask for a swing; cleared once the swing resolves or is refused.
+    /// Raised to ask for a swing. Never refused outright: an ask that arrives
+    /// mid-attack goes into §5.1's input buffer and fires on the first legal
+    /// tick, which is most of what the feel of this layer rests on.
     pub want_strike: bool,
+    /// Raised to ask for a dodge (§5.1). Legal from idle, and from recovery once
+    /// it has passed its cancel point.
+    pub want_dodge: bool,
 }
 
 /// Dense optional storage, iterated in id order.

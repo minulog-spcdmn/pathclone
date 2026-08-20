@@ -155,6 +155,49 @@ impl Material {
         let factor = Fx::ONE.sub(t.mul(soften_k));
         self.hardness.mul(factor.max(Fx::ZERO))
     }
+
+    /// Hardness during a transition, given how full the part's latent-heat bank
+    /// is (`fraction`, signed, from [`crate::body::Body::phase_fraction`]).
+    ///
+    /// §6.3 step 5, added in v1.0: "Partial phase progress is a state, not just
+    /// a counter. A part above its melt point with a half-full buffer is
+    /// *softening*: effective `hardness` falls with progress. A blade you have
+    /// been heating gets worse before it dies."
+    ///
+    /// Without this the plateau is invisible: temperature is pinned at the
+    /// threshold while the bank fills, so [`Material::hardness_at`] alone
+    /// reports the same hardness for a blade one tick into melting as for one
+    /// about to become slag. The taper is linear in the bank, which makes the
+    /// whole approach legible — the strain audio and crack splines of §12.6
+    /// have something continuous to track, rather than a step at the end.
+    ///
+    /// `phase_soften_k` bounds how far the taper can go, and it has to be less
+    /// than one. A taper that reaches zero hardness makes an upward transition
+    /// unreachable under any mechanical load at all: the part's hardness falls
+    /// below whatever stress is on it before the bank fills, so it is deformed
+    /// to nothing every time, and "melt it while grinding it" or "melt it while
+    /// it rests on something" become impossible in general rather than as a
+    /// result of the numbers involved. §6.3 asks for the opposite — softening
+    /// that is "tactically useful without being an instant-win".
+    ///
+    /// Only upward transitions soften. Freezing is a bank filling in the other
+    /// direction and the thing it produces is usually *harder*; that is
+    /// expressed by the product material, not by a curve here.
+    pub fn hardness_softening(
+        &self,
+        temp: Fx,
+        reference_temp: Fx,
+        soften_k: Fx,
+        phase_soften_k: Fx,
+        fraction: Fx,
+    ) -> Fx {
+        let base = self.hardness_at(temp, reference_temp, soften_k);
+        if !fraction.is_positive() {
+            return base;
+        }
+        let taper = fraction.clamp(Fx::ZERO, Fx::ONE).mul(phase_soften_k);
+        base.mul(Fx::ONE.sub(taper).max(Fx::ZERO))
+    }
 }
 
 /// The whole of L1: every material, every reaction, and the (inert) name bytes.

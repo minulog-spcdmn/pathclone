@@ -53,7 +53,14 @@ interface Exports {
   sim_graft(entity: number, material: number, volume: bigint, temp: bigint, linkTo: number): number;
   sim_set_effectors(entity: number, strength: bigint, wielded: bigint): void;
   sim_set_locomotion(entity: number, maxSpeed: bigint, accel: bigint, massRef: bigint): void;
-  sim_set_agency(entity: number, dx: bigint, dy: bigint, facing: bigint, wantStrike: number): void;
+  sim_set_agency(
+    entity: number,
+    dx: bigint,
+    dy: bigint,
+    facing: bigint,
+    wantStrike: number,
+    wantDodge: number,
+  ): void;
   sim_entity_field(entity: number, field: number): bigint;
   sim_swing(entity: number): number;
   sim_set_part_temp(entity: number, part: number, temp: bigint): number;
@@ -141,9 +148,31 @@ export const EVENT_KINDS = [
   "spawned",
   "conducted",
   "swung",
+  "nearing",
+  "committed",
+  "dodged",
+  "evaded",
 ] as const;
 
 export type EventKind = (typeof EVENT_KINDS)[number];
+
+/** Mirrors `AttackPhase` in sim/src/ecs.rs — §5.1's commitment model. */
+export const ATTACK_PHASES = ["idle", "windup", "active", "recovery"] as const;
+
+export type AttackPhase = (typeof ATTACK_PHASES)[number];
+
+export interface Attack {
+  phase: AttackPhase;
+  /** Seconds left in the phase. */
+  left: number;
+  /** Seconds the phase started with. */
+  total: number;
+  /** 0–1 through the phase, for anything that wants to animate it. */
+  progress: number;
+  dodgeLeft: number;
+  /** Inside the i-frame window, so a blow arriving now finds nothing. */
+  evading: boolean;
+}
 
 export interface ReadoutEvent {
   tick: number;
@@ -340,17 +369,47 @@ export class Substrate {
    * struct at M4. Nothing downstream can tell which, which is §6.1's rule about
    * never asking "is this a player?" enforced by there being no other way in.
    */
-  setAgency(entity: number, moveX: number, moveY: number, facing: number, wantStrike: boolean) {
-    this.ex.sim_set_agency(entity, toFx(moveX), toFx(moveY), toFx(facing), wantStrike ? 1 : 0);
+  setAgency(
+    entity: number,
+    moveX: number,
+    moveY: number,
+    facing: number,
+    wantStrike: boolean,
+    wantDodge: boolean,
+  ) {
+    this.ex.sim_set_agency(
+      entity,
+      toFx(moveX),
+      toFx(moveY),
+      toFx(facing),
+      wantStrike ? 1 : 0,
+      wantDodge ? 1 : 0,
+    );
   }
 
   facingOf(entity: number): number {
     return fromFx(this.ex.sim_entity_field(entity, 0));
   }
 
-  /** Seconds until this entity can swing again. */
-  recoveryOf(entity: number): number {
-    return fromFx(this.ex.sim_entity_field(entity, 1));
+  /**
+   * Where the entity is in §5.1's commitment model, and how far through.
+   *
+   * The renderer needs all of it — a pose is a function of the phase and the
+   * fraction elapsed — and none of it is a second copy of anything: these are
+   * the simulation's own timers, read back.
+   */
+  attackOf(entity: number): Attack {
+    const phase = ATTACK_PHASES[Number(this.ex.sim_entity_field(entity, 5))] ?? "idle";
+    const left = fromFx(this.ex.sim_entity_field(entity, 1));
+    const total = fromFx(this.ex.sim_entity_field(entity, 6));
+    return {
+      phase,
+      left,
+      total,
+      progress: total > 0 ? Math.min(1, Math.max(0, (total - left) / total)) : 0,
+      dodgeLeft: fromFx(this.ex.sim_entity_field(entity, 7)),
+      evading: this.ex.sim_entity_field(entity, 8) !== 0n,
+    };
   }
 
   speedOf(entity: number): number {
@@ -362,7 +421,12 @@ export class Substrate {
     return fromFx(this.ex.sim_entity_field(entity, 3));
   }
 
-  /** 1 hit, 0 missed, -1 recovering, -2 nothing to swing with. */
+  /**
+   * Resolve a blow immediately, with no windup. The play path is `setAgency`
+   * with `wantStrike`; this is here for probing "what would this do to that".
+   *
+   * 1 hit, 0 missed, 2 committed, -1 mid-attack, -2 nothing to swing with.
+   */
   swing(entity: number): number {
     return this.ex.sim_swing(entity);
   }

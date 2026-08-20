@@ -268,7 +268,7 @@ pub extern "C" fn sim_set_effectors(entity: u32, strength: i64, wielded: i64) {
                 } else {
                     Some(wielded as u32)
                 },
-                recovery: Fx::ZERO,
+                ..Default::default()
             },
         );
     });
@@ -296,7 +296,14 @@ pub extern "C" fn sim_set_locomotion(entity: u32, max_speed: i64, accel: i64, ma
 /// will be able to tell the difference. That is §6.1's rule about never asking
 /// "is this a player?", enforced by there being no other way in.
 #[no_mangle]
-pub extern "C" fn sim_set_agency(entity: u32, dx: i64, dy: i64, facing: i64, want_strike: u32) {
+pub extern "C" fn sim_set_agency(
+    entity: u32,
+    dx: i64,
+    dy: i64,
+    facing: i64,
+    want_strike: u32,
+    want_dodge: u32,
+) {
     with_sim(|s| {
         s.ecs.agency.insert(
             entity,
@@ -304,13 +311,20 @@ pub extern "C" fn sim_set_agency(entity: u32, dx: i64, dy: i64, facing: i64, wan
                 move_dir: V3::new(Fx::from_raw(dx), Fx::from_raw(dy), Fx::ZERO),
                 facing: Fx::from_raw(facing),
                 want_strike: want_strike != 0,
+                want_dodge: want_dodge != 0,
             },
         );
     });
 }
 
-/// Per-entity scalars: 0 facing, 1 swing recovery, 2 current speed,
-/// 3 the reach of whatever is being wielded, 4 strength.
+/// Per-entity scalars: 0 facing, 1 seconds left in the current §5.1 phase,
+/// 2 current speed, 3 the reach of whatever is being wielded, 4 strength,
+/// 5 the phase itself as [`AttackPhase`], 6 the length that phase started with,
+/// 7 seconds of dodge left, 8 whether the entity is inside its i-frames.
+///
+/// 5–8 exist so a renderer can animate §5.1 without a second copy of its
+/// numbers: an entity's pose is a function of which phase it is in and how far
+/// through it is, and both of those are simulation state.
 #[no_mangle]
 pub extern "C" fn sim_entity_field(entity: u32, field: u32) -> i64 {
     with_sim(|s| match field {
@@ -324,7 +338,7 @@ pub extern "C" fn sim_entity_field(entity: u32, field: u32) -> i64 {
             .ecs
             .effectors
             .get(entity)
-            .map(|f| f.recovery.raw())
+            .map(|f| f.phase_left.raw())
             .unwrap_or(0),
         2 => s
             .ecs
@@ -351,17 +365,52 @@ pub extern "C" fn sim_entity_field(entity: u32, field: u32) -> i64 {
             .get(entity)
             .map(|f| f.strength.raw())
             .unwrap_or(0),
+        5 => s
+            .ecs
+            .effectors
+            .get(entity)
+            .map(|f| f.phase as u8 as i64)
+            .unwrap_or(0),
+        6 => s
+            .ecs
+            .effectors
+            .get(entity)
+            .map(|f| f.phase_total.raw())
+            .unwrap_or(0),
+        7 => s
+            .ecs
+            .effectors
+            .get(entity)
+            .map(|f| f.dodge_left.raw())
+            .unwrap_or(0),
+        8 => s
+            .ecs
+            .effectors
+            .get(entity)
+            .map(|f| {
+                i64::from(f.evading(
+                    s.rules.dodge_iframe_from,
+                    s.rules.dodge_iframe_to,
+                    s.rules.dodge_time,
+                ))
+            })
+            .unwrap_or(0),
         _ => 0,
     })
 }
 
-/// Resolve a swing immediately rather than waiting for the tick. Returns
-/// 1 hit, 0 missed, -1 still recovering, -2 nothing to swing.
+/// Resolve a swing immediately, with no §5.1 windup in the way. Returns
+/// 1 hit, 0 missed, -1 mid-attack, -2 nothing to swing.
+///
+/// This is the scenario and test entry point — "what would this weapon do to
+/// that material" — not the play path. In play the arena raises `want_strike`
+/// on §6.1's `Agency` and the effector pass decides when the blow lands.
 #[no_mangle]
 pub extern "C" fn sim_swing(entity: u32) -> i32 {
-    with_sim(|s| match s.swing(entity) {
+    with_sim(|s| match s.swing_now(entity) {
         crate::impulse::SwingOutcome::Hit { .. } => 1,
         crate::impulse::SwingOutcome::Missed => 0,
+        crate::impulse::SwingOutcome::Committed => 2,
         crate::impulse::SwingOutcome::Recovering => -1,
         crate::impulse::SwingOutcome::NoEffectors => -2,
     })

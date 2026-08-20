@@ -1,5 +1,5 @@
 {
-  "$comment": "DESIGN.md \u00a74.2 and \u00a74.4. This file is the deliverable, not the scaffolding around it. Values are game units, not SI: what matters is monotonicity and consistent ratios (\u00a74.2). `class` is taxonomy only and has no mechanical effect. `formation` is carried for \u00a75.1 layer 6 and is deliberately not packed into the simulation yet \u2014 worldgen is M2. `solidify` is a downward phase crossing; see sim/src/material.rs for why the \u00a74.2 schema needs it.",
+  "$comment": "DESIGN.md \u00a76.2 and \u00a76.4. This file is the deliverable, not the scaffolding around it. Values are game units, not SI: what matters is monotonicity and consistent ratios (\u00a76.2). `class` is taxonomy only and has no mechanical effect. `formation` is carried for \u00a77.1 layer 6 and is deliberately not packed into the simulation yet \u2014 worldgen is M2. `solidify` is a downward phase crossing; see sim/src/material.rs for why the \u00a76.2 schema needs it.",
   "tags": [
     "solvent",
     "acid",
@@ -213,7 +213,7 @@
         "mineral",
         "aetheric"
       ],
-      "$comment": "\u00a74.2's worked example, kept as authored except for the melt point. The document's -20 makes the material a liquid at any habitable temperature, which is not what the surrounding prose describes; 45 keeps it solid in hand and liquid near a forge, which is the behaviour \u00a74.3 promises.",
+      "$comment": "\u00a76.2's worked example, kept as authored except for the melt point. The document's -20 makes the material a liquid at any habitable temperature, which is not what the surrounding prose describes; 45 keeps it solid in hand and liquid near a forge, which is the behaviour \u00a76.3 promises.",
       "density": 2.1,
       "hardness": 7.2,
       "toughness": 0.18,
@@ -914,7 +914,7 @@
         "metal",
         "reducer"
       ],
-      "$comment": "The alloy of copper and tin \u2014 harder than either parent and tougher than iron. \u00a75.4 wants alloy curves with local optima; this is the peak of one.",
+      "$comment": "The alloy of copper and tin \u2014 harder than either parent and tougher than iron. \u00a77.4 wants alloy curves with local optima; this is the peak of one.",
       "density": 8.6,
       "hardness": 3.6,
       "toughness": 0.68,
@@ -1036,7 +1036,7 @@
         "reducer",
         "aetheric"
       ],
-      "$comment": "The anti-correlated outlier \u00a74.2 asks for: hard AND tough, conductive AND permeable. It was never authored as a legendary item, it is just a rock that landed wrong. Abundance is near zero for a reason.",
+      "$comment": "The anti-correlated outlier \u00a76.2 asks for: hard AND tough, conductive AND permeable. It was never authored as a legendary item, it is just a rock that landed wrong. Abundance is near zero for a reason.",
       "density": 7.9,
       "hardness": 8.2,
       "toughness": 0.88,
@@ -2340,7 +2340,7 @@
       "tags": [
         "aetheric"
       ],
-      "$comment": "Huge capacity, low threshold: it will not hold what it can carry, so it sheds constantly. Harvested from creatures and anomalies; \u00a76.3's socket contents.",
+      "$comment": "Huge capacity, low threshold: it will not hold what it can carry, so it sheds constantly. Harvested from creatures and anomalies; \u00a78.3's socket contents.",
       "density": 1.6,
       "hardness": 2.2,
       "toughness": 0.3,

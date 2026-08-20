@@ -26,7 +26,25 @@
   "flux_destabilise_k": 0.10,
   "swing_arc": 1.1,
 
+  "$comment_commitment": "§5.1's commitment model, in seconds. The document's own baselines: windup 100-250 ms scaling with weapon mass, active frames 60-120 ms, recovery 150-400 ms, dodge 350 ms with i-frames from 60-180 ms and a 200 ms lockout, and a 200 ms input buffer. Recovery has a floor and no ceiling here, because a weapon slower than the band is a weapon the player built too heavy and should feel it.",
+  "windup_min": 0.10,
+  "windup_max": 0.25,
+  "windup_mass_k": 0.025,
+  "active_min": 0.06,
+  "active_max": 0.12,
+  "recovery_min": 0.15,
+  "recovery_cancel": 0.40,
+  "input_buffer": 0.20,
+  "dodge_time": 0.35,
+  "dodge_iframe_from": 0.171,
+  "dodge_iframe_to": 0.514,
+  "dodge_lockout": 0.20,
+  "dodge_speed_k": 2.5,
+
+  "margin_band": 0.60,
+
   "soften_k": 0.90,
+  "phase_soften_k": 0.45,
   "reaction_k": 1.0,
 
   "fragment_max": 4,

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.invalid/schema/forms.schema.json",
   "title": "Form table",
-  "description": "DESIGN.md \u00a76.1. Forms are geometry and attachment topology \u2014 'rules about shape, not content'. A form carries no statistics: mass, swing speed, impulse profile and durability are all derived from whatever materials end up in its slots, at the point of use.",
+  "description": "DESIGN.md \u00a78.1. Forms are geometry and attachment topology \u2014 'rules about shape, not content'. A form carries no statistics: mass, swing speed, impulse profile and durability are all derived from whatever materials end up in its slots, at the point of use.",
   "type": "object",
   "required": [
     "forms"
@@ -90,7 +90,7 @@
           "type": "string"
         },
         "edge_area": {
-          "description": "Contact area of the striking geometry. This one number is the whole difference between a blade and a maul (\u00a74.3).",
+          "description": "Contact area of the striking geometry. This one number is the whole difference between a blade and a maul (\u00a76.3).",
           "type": "number",
           "exclusiveMinimum": 0
         },

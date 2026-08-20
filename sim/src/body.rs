@@ -199,6 +199,34 @@ impl Body {
         (heat, charge)
     }
 
+    /// How full a part's latent-heat bank is, as a fraction of what the pending
+    /// transition costs. Signed: positive banking upward (melting, boiling),
+    /// negative banking downward (freezing).
+    ///
+    /// §6.3 step 5 asks for this to be readable as a *state* rather than a
+    /// counter — "a part above its melt point with a half-full buffer is
+    /// softening" — so both the resolver and the Lens read it from here rather
+    /// than each deriving it from `phase_progress` and volume separately.
+    pub fn phase_fraction(&self, idx: usize, table: &MaterialTable) -> Fx {
+        let p = match self.parts.get(idx) {
+            Some(p) => p,
+            None => return Fx::ZERO,
+        };
+        if p.phase_target == NO_TRANSITION || p.phase_progress.is_zero() {
+            return Fx::ZERO;
+        }
+        let m = match table.get(p.material) {
+            Some(m) => m,
+            None => return Fx::ZERO,
+        };
+        let point = &m.phases[p.phase_target as usize];
+        let required = point.latent.abs().mul(p.volume);
+        if !required.is_positive() {
+            return Fx::ZERO;
+        }
+        p.phase_progress.div(required).clamp(Fx::ONE.neg(), Fx::ONE)
+    }
+
     /// A rough radius, for reach and separation tests.
     ///
     /// Not a collision hull — §3 rules out rigid-body everything, and M1 has no

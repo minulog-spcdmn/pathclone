@@ -130,8 +130,9 @@ impl Fx {
         Fx(self.0 - (self.floor_int() << FRAC_BITS))
     }
 
-    /// **Presentation only.** Never call this from simulation code — §14.4
-    /// rule 1. It exists so hosts can draw numbers on a screen.
+    /// **Presentation only.** Never call this from simulation code: an `f64`
+    /// that reaches the state hash is a desync waiting for a different host.
+    /// It exists so hosts can draw numbers on a screen.
     #[inline]
     pub fn to_f64_lossy(self) -> f64 {
         self.0 as f64 / ONE_RAW as f64

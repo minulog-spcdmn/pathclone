@@ -5,7 +5,7 @@
 //! different state hashes even with identical arithmetic.
 
 use crate::body::{Body, Part};
-use crate::ecs::{Ecs, EntityId, Transform, V3};
+use crate::ecs::{AttackPhase, Ecs, EntityId, Transform, V3};
 use crate::events::{Event, EventKind, EventLog};
 use crate::fixed::Fx;
 use crate::form::FormTable;
@@ -87,8 +87,59 @@ pub struct Rules {
     /// behind you.
     pub swing_arc: Fx,
 
+    // --- §5.1, the commitment model ---------------------------------------
+    //
+    // "Baseline numbers, to be tuned but not abandoned." They are tuned in
+    // data, because §5 is owned by a designer rather than the simulation team
+    // and §15 says the fix for a feel problem is a coefficient, never a special
+    // case. The cycle as a whole still lasts one over §8.1's derived swing rate
+    // — a heavy weapon is slow because it is heavy — and these decide only how
+    // that time is *spent*.
+    /// Shortest windup, seconds. §5.1: 100 ms.
+    pub windup_min: Fx,
+    /// Longest windup, seconds. §5.1: 250 ms.
+    pub windup_max: Fx,
+    /// Seconds of windup per unit of wielded mass, before the clamp. This is
+    /// the term that makes a player-crafted absurd maul feel absurd with no
+    /// tuning, which is §5.1's whole argument for deriving feel from the
+    /// simulation instead of authoring it.
+    pub windup_mass_k: Fx,
+    /// The active frames, seconds. §5.1: 60–120 ms.
+    pub active_min: Fx,
+    pub active_max: Fx,
+    /// Floor on recovery, seconds. §5.1: 150 ms. There is no ceiling here —
+    /// recovery is the remainder of the cycle, so the weapon's own slowness is
+    /// the ceiling.
+    pub recovery_min: Fx,
+    /// Fraction of recovery that must elapse before movement or a dodge may
+    /// cancel it. §5.1: 40%.
+    pub recovery_cancel: Fx,
+    /// §5.1's input buffer, seconds: 200 ms.
+    pub input_buffer: Fx,
+    /// Dodge duration, seconds. §5.1: 350 ms total.
+    pub dodge_time: Fx,
+    /// I-frame window, as fractions of the dodge. §5.1: 60–180 ms of 350 ms.
+    pub dodge_iframe_from: Fx,
+    pub dodge_iframe_to: Fx,
+    /// Seconds after a dodge before another is legal. §5.1: 200 ms.
+    pub dodge_lockout: Fx,
+    /// Multiple of the entity's own top speed a dodge travels at.
+    pub dodge_speed_k: Fx,
+
+    /// §12.6: "Warnings precede consequences." A part inside this fraction of a
+    /// threshold — fracture, phase or discharge — reports a margin, so nothing
+    /// can arrive without an approach the player could have read. §6.3 states
+    /// the same requirement from the other side: "no binary hidden threshold
+    /// may determine a combat outcome."
+    pub margin_band: Fx,
+
     /// Hardness falloff between `reference_temp` and the melting point.
     pub soften_k: Fx,
+    /// The other half of §6.3 step 5's softening: how much of the hardness left
+    /// at the threshold a full latent-heat bank takes away. Strictly below 1 —
+    /// see [`Material::hardness_softening`] for why a taper to zero makes
+    /// melting-under-load impossible rather than merely hard.
+    pub phase_soften_k: Fx,
     /// Volume converted per unit of corrosive potential, before per-reaction
     /// rate and the target's corrosion resistance.
     pub reaction_k: Fx,
@@ -124,7 +175,22 @@ impl Default for Rules {
             charge_energy_coeff: Fx::from_int(2),
             flux_destabilise_k: Fx::from_ratio(1, 10),
             swing_arc: Fx::from_ratio(11, 10),
+            windup_min: Fx::from_ratio(1, 10),
+            windup_max: Fx::from_ratio(1, 4),
+            windup_mass_k: Fx::from_ratio(1, 40),
+            active_min: Fx::from_ratio(3, 50),
+            active_max: Fx::from_ratio(3, 25),
+            recovery_min: Fx::from_ratio(3, 20),
+            recovery_cancel: Fx::from_ratio(2, 5),
+            input_buffer: Fx::from_ratio(1, 5),
+            dodge_time: Fx::from_ratio(7, 20),
+            dodge_iframe_from: Fx::from_ratio(6, 35),
+            dodge_iframe_to: Fx::from_ratio(18, 35),
+            dodge_lockout: Fx::from_ratio(1, 5),
+            dodge_speed_k: Fx::from_ratio(5, 2),
+            margin_band: Fx::from_ratio(3, 5),
             soften_k: Fx::from_ratio(9, 10),
+            phase_soften_k: Fx::from_ratio(9, 20),
             reaction_k: Fx::ONE,
             fragment_max: 4,
             cascade_generations: 3,
@@ -134,7 +200,7 @@ impl Default for Rules {
 
 /// `"RL01"` little-endian.
 pub const RULES_MAGIC: u32 = 0x3130_4C52;
-pub const RULES_VERSION: u32 = 1;
+pub const RULES_VERSION: u32 = 2;
 
 impl Rules {
     pub fn decode(buf: &[u8]) -> Result<Rules, DecodeError> {
@@ -167,7 +233,22 @@ impl Rules {
             charge_energy_coeff: r.fx()?,
             flux_destabilise_k: r.fx()?,
             swing_arc: r.fx()?,
+            windup_min: r.fx()?,
+            windup_max: r.fx()?,
+            windup_mass_k: r.fx()?,
+            active_min: r.fx()?,
+            active_max: r.fx()?,
+            recovery_min: r.fx()?,
+            recovery_cancel: r.fx()?,
+            input_buffer: r.fx()?,
+            dodge_time: r.fx()?,
+            dodge_iframe_from: r.fx()?,
+            dodge_iframe_to: r.fx()?,
+            dodge_lockout: r.fx()?,
+            dodge_speed_k: r.fx()?,
+            margin_band: r.fx()?,
             soften_k: r.fx()?,
+            phase_soften_k: r.fx()?,
             reaction_k: r.fx()?,
             fragment_max: r.u32()?,
             cascade_generations: r.u32()?,
@@ -483,12 +564,31 @@ impl Sim {
             let reference = loco.mass_ref.max(Fx::EPSILON);
             let speed = loco.max_speed.mul(reference).div(reference.add(carried));
 
-            let desired = normalise(agency.move_dir).scale(speed);
+            // §5.1's commitment, expressed in the legs. A committed attack does
+            // not travel: windup and the active frames pin the entity in place,
+            // and recovery releases it only after `recovery_cancel` of its
+            // length. A dodge overrides intent entirely for its duration and
+            // goes where it was aimed when it started.
+            //
+            // Nothing here asks what kind of entity this is. An entity with no
+            // `Effectors` is never pinned, because it never commits to
+            // anything — which is exactly right for a rolling boulder.
+            let eff = self.ecs.effectors.get(e).copied();
+            let desired = match eff {
+                Some(f) if f.dodge_left.is_positive() => {
+                    normalise(f.dodge_dir).scale(speed.mul(self.rules.dodge_speed_k))
+                }
+                Some(f) if !f.can_act(self.rules.recovery_cancel) => V3::ZERO,
+                _ => normalise(agency.move_dir).scale(speed),
+            };
+            // A dodge is a burst, not an acceleration: it reaches its speed on
+            // the tick it starts, or the 350 ms in §5.1 is spent getting going.
+            let dodging = eff.map(|f| f.dodge_left.is_positive()).unwrap_or(false);
             if let Some(t) = self.ecs.transform.get_mut(e) {
                 let delta = desired.sub(t.velocity);
                 let len = delta.length();
                 let step = loco.accel.mul(dt);
-                t.velocity = if len <= step || len.is_zero() {
+                t.velocity = if dodging || len <= step || len.is_zero() {
                     desired
                 } else {
                     t.velocity.add(delta.scale(step.div(len)))
@@ -497,33 +597,177 @@ impl Sim {
         }
     }
 
-    /// Tick down swing recovery, and resolve the swings that were asked for.
+    /// §5.1's commitment model: advance every attack phase, then start whatever
+    /// the intent asks for and the phase allows.
+    ///
+    /// The whole of "combat feel" in this project is this function plus the
+    /// movement lock in [`Sim::agency_pass`]. There is no combo system, no
+    /// stamina and no animation state machine — a phase is a duration and a
+    /// permission, and the durations come from the weapon (§5.1: "a
+    /// player-crafted absurdly heavy maul feels absurdly heavy with no
+    /// tuning").
+    ///
+    /// Order within the tick matters and is deliberate: timers advance first,
+    /// so a phase that ends this tick releases the entity this tick; the blow
+    /// resolves on the windup → active edge, so a swing that was committed to
+    /// lands even if the intent has since been dropped; and intent is read last,
+    /// so a queued input can fire on the same tick recovery ends. That last one
+    /// is §5.1's input buffer doing its job — "queued inputs during recovery
+    /// fire on the first legal frame".
     fn effector_pass(&mut self) {
         let dt = self.rules.dt;
-        let mut ready = Vec::new();
+        let cancel = self.rules.recovery_cancel;
+        let mut landing = Vec::new();
+
         for e in self.ecs.effectors.ids() {
+            // --- advance timers ---------------------------------------------
+            let mut ended = None;
             if let Some(f) = self.ecs.effectors.get_mut(e) {
-                f.recovery = f.recovery.sub(dt).max(Fx::ZERO);
+                f.buffered = f.buffered.sub(dt).max(Fx::ZERO);
+                f.dodge_lockout = f.dodge_lockout.sub(dt).max(Fx::ZERO);
+                if f.dodge_left.is_positive() {
+                    f.dodge_left = f.dodge_left.sub(dt).max(Fx::ZERO);
+                }
+                if f.phase != AttackPhase::Idle {
+                    f.phase_left = f.phase_left.sub(dt).max(Fx::ZERO);
+                    if f.phase_left <= Fx::ZERO {
+                        ended = Some(f.phase);
+                    }
+                }
             }
-            let can = self
-                .ecs
-                .effectors
-                .get(e)
-                .map(|f| f.recovery <= Fx::ZERO)
-                .unwrap_or(false);
-            let wants = self
-                .ecs
-                .agency
-                .get(e)
-                .map(|a| a.want_strike)
-                .unwrap_or(false);
-            if can && wants {
-                ready.push(e);
+
+            // --- phase transitions -------------------------------------------
+            match ended {
+                Some(AttackPhase::Windup) => landing.push(e),
+                Some(AttackPhase::Active) => {
+                    let recovery = self
+                        .ecs
+                        .effectors
+                        .get(e)
+                        .map(|f| f.phase_total)
+                        .unwrap_or(Fx::ZERO);
+                    if let Some(f) = self.ecs.effectors.get_mut(e) {
+                        // `phase_total` carried the recovery length through the
+                        // active frames so the strike could be resolved without
+                        // deriving the profile twice.
+                        f.phase = AttackPhase::Recovery;
+                        f.phase_left = recovery;
+                        f.phase_total = recovery;
+                    }
+                }
+                Some(AttackPhase::Recovery) => {
+                    if let Some(f) = self.ecs.effectors.get_mut(e) {
+                        f.phase = AttackPhase::Idle;
+                        f.phase_total = Fx::ZERO;
+                    }
+                }
+                _ => {}
             }
         }
-        for e in ready {
-            self.swing(e);
+
+        // The windup is paid for; the blow lands. Resolution is unchanged from
+        // an immediate swing — the phases decide *when*, never *what*.
+        for e in landing {
+            self.enter_active(e);
         }
+
+        // --- intent -----------------------------------------------------------
+        for e in self.ecs.effectors.ids() {
+            let (wants_strike, wants_dodge) = match self.ecs.agency.get(e) {
+                Some(a) => (a.want_strike, a.want_dodge),
+                None => (false, false),
+            };
+            if wants_strike {
+                let buffer = self.rules.input_buffer;
+                if let Some(f) = self.ecs.effectors.get_mut(e) {
+                    // §5.1 scopes the queue to recovery — "queued inputs during
+                    // recovery fire on the first legal frame" — so a press made
+                    // there is held until the cancel point however far off it
+                    // is. A flat 200 ms would drop a press made at the start of
+                    // a heavy weapon's recovery, which is exactly the case the
+                    // rule exists to fix, and is where the difference between
+                    // responsive and sluggish is actually felt.
+                    //
+                    // Everywhere else the flat buffer applies. A press during
+                    // windup is most of a second from a legal tick, and holding
+                    // it would turn one tap into a swing the player had stopped
+                    // asking for.
+                    //
+                    // It is held for the rest of this recovery and one tick
+                    // more. Both timers fall by `dt` in this same pass, so a
+                    // queue set to exactly the time remaining would expire on
+                    // the very tick it was waiting for.
+                    f.buffered = if f.phase == AttackPhase::Recovery {
+                        f.phase_left.add(dt).max(buffer)
+                    } else {
+                        buffer
+                    };
+                }
+            }
+            if let Some(a) = self.ecs.agency.get_mut(e) {
+                a.want_strike = false;
+                a.want_dodge = false;
+            }
+
+            let f = match self.ecs.effectors.get(e) {
+                Some(f) => *f,
+                None => continue,
+            };
+            // A dodge outranks a queued swing: it is the defensive option, and
+            // an input buffer that swallowed it would be felt as the game
+            // ignoring you at the worst possible moment.
+            if wants_dodge && f.can_act(cancel) && f.dodge_lockout <= Fx::ZERO {
+                self.begin_dodge(e);
+                continue;
+            }
+            if f.buffered.is_positive() && f.can_act(cancel) {
+                self.begin_swing(e);
+            }
+        }
+    }
+
+    /// Start a dodge in the direction the entity is trying to move, or straight
+    /// backwards if it is standing still.
+    fn begin_dodge(&mut self, e: EntityId) {
+        let intent = self
+            .ecs
+            .agency
+            .get(e)
+            .map(|a| a.move_dir)
+            .unwrap_or(V3::ZERO);
+        let facing = self.ecs.agency.get(e).map(|a| a.facing).unwrap_or(Fx::ZERO);
+        let dir = if intent.length_squared().is_positive() {
+            normalise(intent)
+        } else {
+            V3::new(facing.cos().neg(), facing.sin().neg(), Fx::ZERO)
+        };
+        let (time, lockout) = (self.rules.dodge_time, self.rules.dodge_lockout);
+        if let Some(f) = self.ecs.effectors.get_mut(e) {
+            f.dodge_left = time;
+            f.dodge_lockout = time.add(lockout);
+            f.dodge_dir = dir;
+            // Dodging cancels a recovery that had reached its cancel point.
+            if f.phase == AttackPhase::Recovery {
+                f.phase = AttackPhase::Idle;
+                f.phase_left = Fx::ZERO;
+                f.phase_total = Fx::ZERO;
+            }
+        }
+        let tick = self.tick;
+        self.events.push(Event {
+            tick,
+            kind: EventKind::Dodged,
+            entity: e,
+            part: 0,
+            material_before: NO_MATERIAL,
+            material_after: NO_MATERIAL,
+            detail: 0,
+            a: time,
+            b: self
+                .rules
+                .dodge_time
+                .mul(self.rules.dodge_iframe_to.sub(self.rules.dodge_iframe_from)),
+        });
     }
 
     /// Integrate velocity, then push overlapping bodies apart.
@@ -686,6 +930,12 @@ impl Sim {
     /// conduit, which is the difference between a wand and a capacitor and it
     /// is a difference the player can measure.
     fn charge_pass(&mut self) {
+        // §12.6: "`Charge` near `discharge_threshold` → visible arcs leaping to
+        // nearby conductive surfaces — this is a *warning*, and it must fire
+        // before the discharge, not with it." So the margin is measured across
+        // the pass and reported on the tick a part *enters* the band, which is
+        // strictly before the tick it leaves it from the top.
+        let before = self.charge_margins();
         let Sim {
             ecs,
             materials,
@@ -744,6 +994,87 @@ impl Sim {
             }
         }
         self.discharge_scan();
+        self.report_charge_margins(&before);
+    }
+
+    /// Every live part's charge as a fraction of the limit it will arc at.
+    fn charge_margins(&self) -> Vec<(EntityId, u16, Fx)> {
+        let mut out = Vec::new();
+        for e in self.ecs.body.ids() {
+            let body = match self.ecs.body.get(e) {
+                Some(b) => b,
+                None => continue,
+            };
+            for (i, p) in body.parts.iter().enumerate() {
+                if !p.attached || !p.is_live() || !p.charge.is_positive() {
+                    continue;
+                }
+                let m = match self.materials.get(p.material) {
+                    Some(m) => m,
+                    None => continue,
+                };
+                let limit = m.discharge_threshold.min(m.aether_capacity);
+                if limit.is_positive() {
+                    out.push((e, i as u16, p.charge.div(limit)));
+                }
+            }
+        }
+        out
+    }
+
+    /// Emit a [`EventKind::Nearing`] for each part that crossed into the warning
+    /// band this tick. Crossings only: a charged rock sitting at 80% of its
+    /// threshold is a state the world is already showing (§12.1), not news.
+    fn report_charge_margins(&mut self, before: &[(EntityId, u16, Fx)]) {
+        let band = self.rules.margin_band;
+        let after = self.charge_margins();
+        let mut i = 0usize;
+        for &(e, part, now) in &after {
+            if now < band || now >= Fx::ONE {
+                continue;
+            }
+            // Both lists are built in the same id-then-part order, so this walks
+            // forward instead of searching (§14.4 rule 6 — no maps, and no
+            // iteration order that depends on anything but the ids).
+            while i < before.len() && (before[i].0, before[i].1) < (e, part) {
+                i += 1;
+            }
+            let was = if i < before.len() && (before[i].0, before[i].1) == (e, part) {
+                before[i].2
+            } else {
+                Fx::ZERO
+            };
+            if was >= band {
+                continue;
+            }
+            let limit = self
+                .ecs
+                .body
+                .get(e)
+                .and_then(|b| b.parts.get(part as usize))
+                .and_then(|p| self.materials.get(p.material))
+                .map(|m| m.discharge_threshold.min(m.aether_capacity))
+                .unwrap_or(Fx::ZERO);
+            let tick = self.tick;
+            let material = self
+                .ecs
+                .body
+                .get(e)
+                .and_then(|b| b.parts.get(part as usize))
+                .map(|p| p.material)
+                .unwrap_or(NO_MATERIAL);
+            self.events.push(Event {
+                tick,
+                kind: EventKind::Nearing,
+                entity: e,
+                part,
+                material_before: material,
+                material_after: material,
+                detail: 2,
+                a: now,
+                b: limit,
+            });
+        }
     }
 
     /// §6.3 step 6, run every tick rather than only on impact, so a part
@@ -1013,10 +1344,32 @@ impl Sim {
                         p.phase_target = crate::body::NO_TRANSITION;
                     }
                 }
-            } else if let Some(body) = self.ecs.body.get_mut(e) {
-                if let Some(p) = body.parts.get_mut(part as usize) {
-                    p.heat = threshold_heat;
-                    p.phase_progress = progress;
+            } else {
+                if let Some(body) = self.ecs.body.get_mut(e) {
+                    if let Some(p) = body.parts.get_mut(part as usize) {
+                        p.heat = threshold_heat;
+                        p.phase_progress = progress;
+                    }
+                }
+                // §12.6, and §6.3 step 5's "a blade you have been heating gets
+                // worse before it dies": the bank crossing into the warning band
+                // is the moment the part is visibly losing. Reported on the
+                // crossing only, so a fire under a cauldron does not fill the
+                // Readout with the same line every tick.
+                let band = self.rules.margin_band.mul(required);
+                if progress.abs() >= band && progress_before.abs() < band {
+                    let tick = self.tick;
+                    self.events.push(Event {
+                        tick,
+                        kind: EventKind::Nearing,
+                        entity: e,
+                        part,
+                        material_before: material,
+                        material_after: point.product,
+                        detail: 1,
+                        a: progress.abs().div(required.max(Fx::EPSILON)),
+                        b: point.temp,
+                    });
                 }
             }
             return false;
@@ -1281,7 +1634,14 @@ impl Sim {
             if let Some(f) = self.ecs.effectors.get(e) {
                 h.write_u8(1);
                 h.write_i64(f.strength.raw());
-                h.write_i64(f.recovery.raw());
+                // §5.1's phase machine is simulation state, not presentation:
+                // whether a blow lands this tick depends on it, so a host that
+                // disagreed about it would be desynced whether or not the
+                // divergence had reached a position yet.
+                h.write_u8(f.phase as u8);
+                for v in [f.phase_left, f.phase_total, f.buffered, f.dodge_left, f.dodge_lockout] {
+                    h.write_i64(v.raw());
+                }
                 h.write_u32(f.wielded.unwrap_or(u32::MAX));
             } else {
                 h.write_u8(0);

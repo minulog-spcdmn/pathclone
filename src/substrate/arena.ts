@@ -111,7 +111,7 @@ root.innerHTML = `
   <main class="stage">
     <canvas id="view" tabindex="0"></canvas>
     <div class="stage-overlay">
-      <span id="hint">WASD move · mouse aim · click or space to swing · click a part to inspect · R resets</span>
+      <span id="hint">WASD move · mouse aim · click to swing · space to dodge · shift-click to inspect · R resets</span>
       <span id="surface-legend"></span>
     </div>
   </main>
@@ -181,7 +181,7 @@ function buildArena() {
   player = sim.assemble(p.form, p.materials, { x: p.at[0], y: p.at[1], z: 0 }, arena.ambient_temp);
   labels.set(player, "you");
   sim.setLocomotion(player, p.locomotion.max_speed, p.locomotion.accel, p.locomotion.mass_ref);
-  sim.setAgency(player, 0, 0, 0, false);
+  sim.setAgency(player, 0, 0, 0, false, false);
   weapon = null;
   equip(equipped);
 
@@ -271,8 +271,9 @@ function stepWorld() {
 
     const pos = playerPosition();
     const facing = Math.atan2(mouseWorld.y - pos.y, mouseWorld.x - pos.x);
-    const wantStrike = mouseDown || held.has("Space");
-    sim.setAgency(player, dx, dy, facing, wantStrike);
+    // Space is the dodge and the mouse is the swing. Neither is obeyed
+    // directly: they are intent, and §5.1's phases decide what becomes of it.
+    sim.setAgency(player, dx, dy, facing, mouseDown, held.has("Space"));
   }
   sim.step(1);
   collectEvents();
@@ -388,11 +389,34 @@ function draw() {
     if (you) {
       const [px, py] = toScreen(you.position.x, you.position.y);
       const r = 0.95 * zoom;
-      ctx.strokeStyle = "rgba(111,179,255,0.28)";
-      ctx.lineWidth = 1.5;
+      const attack = sim.attackOf(player);
+      ctx.strokeStyle = attack.evading ? "rgba(255,255,255,0.85)" : "rgba(111,179,255,0.28)";
+      ctx.lineWidth = attack.evading ? 2.5 : 1.5;
       ctx.beginPath();
       ctx.arc(px, py, r, 0, Math.PI * 2);
       ctx.stroke();
+      // §5.1's commitment, drawn as the arc it actually is: the ring fills
+      // through the windup you can no longer stop, and empties through the
+      // recovery you are stuck in. Nothing here is a cooldown bar over a
+      // number — it is the phase timer, read back from the simulation.
+      if (attack.phase !== "idle") {
+        ctx.strokeStyle =
+          attack.phase === "windup"
+            ? "rgba(255,196,110,0.85)"
+            : attack.phase === "active"
+              ? "rgba(255,120,90,0.9)"
+              : "rgba(120,140,170,0.5)";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(
+          px,
+          py,
+          r + 5,
+          -Math.PI / 2,
+          -Math.PI / 2 + Math.PI * 2 * (attack.phase === "recovery" ? 1 - attack.progress : attack.progress),
+        );
+        ctx.stroke();
+      }
       // A short spur showing which way the swing will go.
       ctx.strokeStyle = "rgba(111,179,255,0.5)";
       ctx.beginPath();
@@ -465,20 +489,35 @@ function draw() {
   drawn = screen;
 }
 
-/** Position the wielded weapon in the hand, swinging through its arc. */
+/**
+ * Position the wielded weapon in the hand, swinging through its arc.
+ *
+ * The pose is a pure function of §5.1's phase and how far through it is, so
+ * there is no animation state here at all and nothing to keep in sync: what you
+ * see is the commitment the simulation is enforcing. Windup draws the weapon
+ * back, the active frames sweep it across, recovery carries it home.
+ */
 function heldWeapon(): DrawnPart[] {
   const view = snapshot?.entities.find((e) => e.id === weapon);
   const you = snapshot?.entities.find((e) => e.id === player);
   if (!view || !you) return [];
-  // Recovery drives the animation, so what you see is the cooldown the
-  // simulation is actually enforcing.
-  const recovery = sim.recoveryOf(player);
-  const swing = swingAge < 6 ? Math.sin((1 - swingAge / 6) * Math.PI) : 0;
-  const sweep = (swing * (swingHit ? 1 : 0.7) - 0.35) * rulesDoc.swing_arc;
-  const angle = you.orientation + sweep;
+  const attack = sim.attackOf(player);
+  let sweep = -0.35;
+  let extend = 0;
+  if (attack.phase === "windup") {
+    sweep = -0.35 - 0.75 * attack.progress;
+    extend = -0.06 * attack.progress;
+  } else if (attack.phase === "active") {
+    sweep = -1.1 + 2.1 * attack.progress;
+    extend = 0.25;
+  } else if (attack.phase === "recovery") {
+    sweep = 1.0 - 1.35 * Math.min(1, attack.progress * 2);
+    extend = 0.2 * (1 - Math.min(1, attack.progress * 2));
+  }
+  const angle = you.orientation + sweep * rulesDoc.swing_arc;
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
-  const grip = 0.42 + swing * 0.25 - Math.min(recovery, 0.4) * 0.2;
+  const grip = 0.42 + extend;
   const form = sim.forms.docs[view.form];
   const out: DrawnPart[] = [];
   for (const p of view.parts) {
@@ -730,6 +769,14 @@ function describe(e: ReadoutEvent): string {
       return `${where(e)}: ${before} is gone (${fmt(e.a, 3)} volume)`;
     case "spawned":
       return `${fmt(e.a, 3)} of ${before} became its own object`;
+    case "committed":
+      return `${fmt(e.b, 2)} of weapon needs ${fmt(e.a, 2)}s of windup — no way back now`;
+    case "nearing":
+      return `${where(e)}: ${before} held at ${fmt(e.a * 100, 0)}% of a ${fmt(e.b)} threshold`;
+    case "dodged":
+      return `${where(e)}: ${fmt(e.a, 2)}s of roll, ${fmt(e.b, 2)}s of it untouchable`;
+    case "evaded":
+      return `${where(e)}: ${fmt(e.a)} of energy passed through where it had been`;
     default:
       return `${fmt(e.a)} / ${fmt(e.b)}`;
   }
@@ -922,29 +969,7 @@ function frame(now: number) {
     renderReadout();
     if (selection) renderLens();
   }
-  // A handle for the browser-driven smoke test in `tools/`. This page is a
-// development arena, not a shipped client, and being able to ask it where the
-// player is standing is worth more than hiding it.
-(window as unknown as Record<string, unknown>).arena = {
-  player: () => player,
-  weapon: () => weapon,
-  equipped: () => arena.rack[equipped].label,
-  position: () => playerPosition(),
-  props: () =>
-    (snapshot?.entities ?? []).map((e) => ({
-      id: e.id,
-      label: labels.get(e.id) ?? null,
-      x: e.position.x,
-      y: e.position.y,
-    })),
-  reach: () => sim.reachOf(player),
-  recovery: () => sim.recoveryOf(player),
-  speed: () => sim.speedOf(player),
-  integrity: (entity: number, part: number) => sim.partIntegrity(entity, part),
-  material: (entity: number, part: number) => sim.materialName(sim.partMaterial(entity, part)),
-};
-
-requestAnimationFrame(frame);
+  requestAnimationFrame(frame);
 }
 
 // A handle for the browser-driven smoke test in `tools/`. This page is a
@@ -963,7 +988,7 @@ requestAnimationFrame(frame);
       y: e.position.y,
     })),
   reach: () => sim.reachOf(player),
-  recovery: () => sim.recoveryOf(player),
+  attack: () => sim.attackOf(player),
   speed: () => sim.speedOf(player),
   integrity: (entity: number, part: number) => sim.partIntegrity(entity, part),
   material: (entity: number, part: number) => sim.materialName(sim.partMaterial(entity, part)),

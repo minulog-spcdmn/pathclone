@@ -1,5 +1,5 @@
 {
-  "$comment": "DESIGN.md \u00a76.1. Forms are geometry and attachment topology and nothing else \u2014 'rules about shape, not content'. No form here knows what it will be made of, and none carries a statistic: mass, swing speed, impulse profile and durability are all derived at the point of use from the materials that end up in the slots. The \u00a76.1 target is ~60 forms; M1 needs melee and bodies, so these are the ones that exist. Each part also carries a top-down `offset` in the form's own frame: +x is the direction the wielder faces, +y is to its right. That is geometry, so it lives with the form rather than in a renderer.",
+  "$comment": "DESIGN.md \u00a78.1. Forms are geometry and attachment topology and nothing else \u2014 'rules about shape, not content'. No form here knows what it will be made of, and none carries a statistic: mass, swing speed, impulse profile and durability are all derived at the point of use from the materials that end up in the slots. The \u00a78.1 target is ~60 forms; M1 needs melee and bodies, so these are the ones that exist. Each part also carries a top-down `offset` in the form's own frame: +x is the direction the wielder faces, +y is to its right. That is geometry, so it lives with the form rather than in a renderer.",
   "forms": [
     {
       "id": "blade_straight_single_edge",
@@ -47,7 +47,7 @@
     },
     {
       "id": "blade_curved_single_edge",
-      "$comment": "\u00a76.1's worked example, socket and all.",
+      "$comment": "\u00a78.1's worked example, socket and all.",
       "parts": [
         {
           "id": "blade",
@@ -301,7 +301,7 @@
     },
     {
       "id": "body_bipedal",
-      "$comment": "The form a player uses. Also the form a bandit uses. \u00a74.1 is explicit that nothing may tell them apart, and nothing here does.",
+      "$comment": "The form a player uses. Also the form a bandit uses. \u00a76.1 is explicit that nothing may tell them apart, and nothing here does.",
       "parts": [
         {
           "id": "torso",

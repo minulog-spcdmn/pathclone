@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.invalid/schema/rules.schema.json",
   "title": "Simulation rules",
-  "description": "The hand-authored rules of DESIGN.md \u00a70 \u2014 'as few as possible, and hand-authored with extreme care'. \u00a713's balance philosophy points here first: an overpowered outcome is fixed by a coefficient in this file or a property in materials.json, never by a special case in the resolver. Nothing here may name a material, an item or a creature.",
+  "description": "The hand-authored rules of DESIGN.md \u00a70 \u2014 'as few as possible, and hand-authored with extreme care'. \u00a715's balance philosophy points here first: an overpowered outcome is fixed by a coefficient in this file or a property in materials.json, never by a special case in the resolver. Nothing here may name a material, an item or a creature.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -27,7 +27,22 @@
     "charge_energy_coeff",
     "flux_destabilise_k",
     "swing_arc",
+    "windup_min",
+    "windup_max",
+    "windup_mass_k",
+    "active_min",
+    "active_max",
+    "recovery_min",
+    "recovery_cancel",
+    "input_buffer",
+    "dodge_time",
+    "dodge_iframe_from",
+    "dodge_iframe_to",
+    "dodge_lockout",
+    "dodge_speed_k",
+    "margin_band",
     "soften_k",
+    "phase_soften_k",
     "reaction_k",
     "fragment_max",
     "cascade_generations"
@@ -54,12 +69,12 @@
       "maximum": 1
     },
     "fracture_k": {
-      "description": "\u00a74.3 step 3's k: how far past hardness a material must be pushed before it separates, scaled by toughness.",
+      "description": "\u00a76.3 step 3's k: how far past hardness a material must be pushed before it separates, scaled by toughness.",
       "type": "number",
       "minimum": 0
     },
     "blunt_k": {
-      "description": "Energy density per unit toughness at which a broad impact breaks a part regardless of stress. \u00a74.3 promises a maul that beats brittle armour without denting it; a pure stress test cannot produce that, because a large contact area is exactly what keeps stress low.",
+      "description": "Energy density per unit toughness at which a broad impact breaks a part regardless of stress. \u00a76.3 promises a maul that beats brittle armour without denting it; a pure stress test cannot produce that, because a large contact area is exactly what keeps stress low.",
       "type": "number",
       "minimum": 0
     },
@@ -86,7 +101,7 @@
       "minimum": 0
     },
     "radiant_k": {
-      "description": "Heat exchanged between separate entities. Conduction along an assembly cannot carry a fire from a burning tree to the wolf beside it, and \u00a74.3 promises exactly that.",
+      "description": "Heat exchanged between separate entities. Conduction along an assembly cannot carry a fire from a burning tree to the wolf beside it, and \u00a76.3 promises exactly that.",
       "type": "number",
       "minimum": 0
     },
@@ -129,6 +144,12 @@
       "minimum": 0,
       "maximum": 1
     },
+    "phase_soften_k": {
+      "description": "\u00a76.3 step 5: how much of the hardness still standing at the melting point a full latent-heat bank takes away, so that \"a part above its melt point with a half-full buffer is softening\". Strictly below 1: at 1 a part loses all hardness before its bank fills, so anything under mechanical load is deformed to nothing instead of ever completing the transition, and melting something while grinding it or while it rests on something becomes impossible in general.",
+      "type": "number",
+      "minimum": 0,
+      "exclusiveMaximum": 1
+    },
     "reaction_k": {
       "type": "number",
       "minimum": 0
@@ -139,7 +160,7 @@
       "maximum": 64
     },
     "cascade_generations": {
-      "description": "\u00a74.3 bounds cascades to guarantee termination; the document's figure is 3.",
+      "description": "\u00a76.3 bounds cascades to guarantee termination; the document's figure is 3.",
       "type": "integer",
       "minimum": 1,
       "maximum": 16
@@ -149,6 +170,93 @@
       "type": "number",
       "minimum": 0,
       "maximum": 3.15
+    },
+    "$comment_commitment": {
+      "type": "string"
+    },
+    "windup_min": {
+      "description": "\u00a75.1: the shortest windup, 100 ms. Windup is the commitment and cannot be cancelled by anything.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "windup_max": {
+      "description": "\u00a75.1: the longest windup, 250 ms, however heavy the weapon.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "windup_mass_k": {
+      "description": "Seconds of windup and active frames added per unit of wielded mass, before the clamps. \u00a75.1: 'weapon mass drives windup and recovery' \u2014 this is the whole of that coupling.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "active_min": {
+      "description": "\u00a75.1: the active frames, 60 ms.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "active_max": {
+      "description": "\u00a75.1: the active frames, 120 ms.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "recovery_min": {
+      "description": "\u00a75.1: recovery floor, 150 ms. Recovery takes whatever is left of \u00a78.1's derived swing cycle, so a heavy weapon exceeds the band on purpose.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "recovery_cancel": {
+      "description": "\u00a75.1: the fraction of recovery that must elapse before movement or a dodge may cancel it.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "input_buffer": {
+      "description": "\u00a75.1's input buffer, 200 ms: 'queued inputs during recovery fire on the first legal frame'.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "dodge_time": {
+      "description": "\u00a75.1: 350 ms total.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "dodge_iframe_from": {
+      "description": "Start of the i-frame window as a fraction of the dodge. \u00a75.1: 60 ms of 350 ms.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "dodge_iframe_to": {
+      "description": "End of the i-frame window as a fraction of the dodge. \u00a75.1: 180 ms of 350 ms.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "dodge_lockout": {
+      "description": "\u00a75.1: 200 ms after a dodge before another is legal.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "dodge_speed_k": {
+      "description": "Multiple of the entity's own top speed a dodge travels at. Derived from its speed rather than fixed, so encumbrance is felt in the dodge too.",
+      "type": "number",
+      "minimum": 1,
+      "maximum": 10
+    },
+    "margin_band": {
+      "description": "\u00a712.6, 'warnings precede consequences': how close to a threshold a part must be before it reports a margin. \u00a76.3 forbids any binary hidden threshold from deciding a combat outcome, and this is the width of the approach that makes it visible.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
     }
   }
 }

@@ -432,6 +432,28 @@ table.props td:last-child {
   color: #8fa4bd;
 }
 
+/* §5.1's commitment model, and §12.6's "warnings precede consequences". */
+.ev.committed {
+  border-left-color: #d9a441;
+}
+.ev.committed .k {
+  color: #d9a441;
+}
+.ev.nearing {
+  border-left-color: var(--warn);
+}
+.ev.nearing .k {
+  color: var(--warn);
+}
+.ev.dodged,
+.ev.evaded {
+  border-left-color: #6fd3c0;
+}
+.ev.dodged .k,
+.ev.evaded .k {
+  color: #6fd3c0;
+}
+
 canvas#view:focus {
   outline: none;
 }

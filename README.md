@@ -9,7 +9,7 @@ with.
 ```bash
 npm install
 npm run sim:build      # cargo -> wasm32, copied to public/sim.wasm
-npm run dev            # WASD, mouse aim, click to swing
+npm run dev            # WASD, mouse aim, click to swing, space to dodge
 ```
 
 `npm run check` runs everything the design gates on:
@@ -81,10 +81,19 @@ corrode and burn, and a Readout tells you which.
 |---|---|
 | `WASD` | move — top speed falls with everything you carry |
 | mouse | aim; a swing only reaches what is in front of you |
-| click / `Space` | swing (hold to keep swinging) |
+| click | swing (hold to keep swinging) |
+| `Space` | dodge — 350 ms, with i-frames in the middle of it |
 | `1`–`9`, `Q`/`E` | change weapon |
 | shift-click | inspect a part with the Lens |
 | `R` | reset the arena |
+
+A swing is a commitment (§5.1). The ring around you fills through a windup you
+can no longer stop, flashes through the active frames where the blow resolves,
+and drains through a recovery you are stuck in until it is 40% spent. All three
+lengths come from the mass of the weapon you happen to be holding, so an absurd
+maul feels absurd without anyone tuning it. A press made during recovery is
+queued and fires on the first legal tick; a press made during the windup is
+not, and expires.
 
 Six training dummies differ in exactly one thing: what their target slot is
 made of. Walk between them with the same weapon and the substrate teaches
@@ -276,11 +285,13 @@ ability graphs (§9), no creatures, ecology or AI (§10), no claims, economy or
 multiplayer (§11, §13), and no persistence (§7.3). §17 M1 forbids starting any of
 it until the gate passes.
 
-The melee layer is deliberately thin: reach, a facing arc, and a recovery
-derived from §8.1's swing rate. There is no combo system, no stamina, no
-attack animation state machine and no hit-location table — the part a blow lands
-on is drawn from the target's own volumes, and severing an arm matters because
-of what the arm was made of.
+The melee layer is deliberately thin: reach, a facing arc, §5.1's three phases
+and a dodge. There is no combo system, no stamina, no attack animation state
+machine and no hit-location table — the part a blow lands on is drawn from the
+target's own volumes, and severing an arm matters because of what the arm was
+made of. The weapon's pose on screen is a pure function of the phase and how far
+through it is, so there is no animation state to keep in sync with the
+simulation; there is nothing but the simulation.
 
 Two things exist as stubs so later work is a change of consumer rather than a
 change of rule: `Rules::aether_density` carries §7.1's layer 5 without a field
