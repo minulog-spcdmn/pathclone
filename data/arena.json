@@ -1,188 +1,358 @@
 {
   "$comment": "DESIGN.md §17 M1: 'Single-player, one small hand-made arena.' Hand-made, and made of data — the arena is a list of forms and materials placed at coordinates, which is all a place can be in a game with no content database. Every dummy below is the same form; the only thing that differs is what its target slot is made of, and that is the entire lesson the arena teaches.",
-
   "ambient_temp": 20,
-
   "player": {
     "$comment": "Not a player type. An entity with a Body, Effectors, Locomotion and Agency, exactly as §6.1 requires — the only thing that makes it the player is that a keyboard writes its Agency.",
     "form": "body_bipedal",
-    "materials": ["flesh", "flesh", "flesh", "flesh", "flesh", "flesh", "boarhide"],
-    "at": [0, 0],
+    "materials": [
+      "flesh",
+      "flesh",
+      "flesh",
+      "flesh",
+      "flesh",
+      "flesh",
+      "boarhide"
+    ],
+    "at": [
+      0,
+      0
+    ],
     "strength": 3.5,
-    "locomotion": { "max_speed": 6.0, "accel": 34, "mass_ref": 12 }
+    "locomotion": {
+      "max_speed": 6.0,
+      "accel": 34,
+      "mass_ref": 12
+    }
   },
-
   "rack": [
     {
       "label": "iron sword",
       "form": "blade_straight_single_edge",
-      "materials": ["cold_iron", "cold_iron", "boarhide"],
+      "materials": [
+        "cold_iron",
+        "cold_iron",
+        "boarhide"
+      ],
       "note": "the dependable one — never breaks, never impresses"
     },
     {
       "label": "obsidian sword",
       "form": "blade_straight_single_edge",
-      "materials": ["obsidian", "cold_iron", "boarhide"],
+      "materials": [
+        "obsidian",
+        "cold_iron",
+        "boarhide"
+      ],
       "note": "hardness 8.50, toughness 0.04 — devastating, and it will not survive stone"
     },
     {
       "label": "quartz sword",
       "form": "blade_straight_single_edge",
-      "materials": ["hoarfrost_quartz", "cold_iron", "boarhide"],
+      "materials": [
+        "hoarfrost_quartz",
+        "cold_iron",
+        "boarhide"
+      ],
       "note": "light and vicious, and it melts at 45 degrees"
     },
     {
       "label": "meteoric sword",
       "form": "blade_straight_single_edge",
-      "materials": ["meteoric_steel", "cold_iron", "boarhide"],
+      "materials": [
+        "meteoric_steel",
+        "cold_iron",
+        "boarhide"
+      ],
       "note": "hard AND tough — the anomaly of §7.4, and it simply never breaks"
     },
     {
       "label": "iron dagger",
       "form": "dagger_leaf",
-      "materials": ["cold_iron", "boarhide"],
+      "materials": [
+        "cold_iron",
+        "boarhide"
+      ],
       "note": "tiny contact area, fast recovery, real work against metal"
     },
     {
       "label": "iron spear",
       "form": "spear_point_shaft",
-      "materials": ["cold_iron", "heartwood", "boarhide"],
+      "materials": [
+        "cold_iron",
+        "heartwood",
+        "boarhide"
+      ],
       "note": "reach 2.4 and enough stress to go through plate — at the point's risk"
     },
     {
       "label": "iron axe",
       "form": "axe_head_haft",
-      "materials": ["cold_iron", "heartwood", "boarhide"],
+      "materials": [
+        "cold_iron",
+        "heartwood",
+        "boarhide"
+      ],
       "note": "between the sword and the maul, and severs limbs"
     },
     {
       "label": "iron maul",
       "form": "maul_head_haft",
-      "materials": ["cold_iron", "heartwood", "boarhide"],
+      "materials": [
+        "cold_iron",
+        "heartwood",
+        "boarhide"
+      ],
       "note": "cannot dent chitin and shatters it anyway; barely bruises flesh"
     },
     {
       "label": "lead maul",
       "form": "maul_head_haft",
-      "materials": ["lead_grey", "heartwood", "boarhide"],
+      "materials": [
+        "lead_grey",
+        "heartwood",
+        "boarhide"
+      ],
       "note": "past the mass optimum: heavier, slower and worse in every way"
     }
   ],
-
   "props": [
     {
       "label": "flesh dummy",
       "form": "training_dummy",
-      "materials": ["flesh", "heartwood", "granite"],
-      "at": [5, -4]
+      "materials": [
+        "flesh",
+        "heartwood",
+        "granite"
+      ],
+      "at": [
+        5,
+        -4
+      ]
     },
     {
       "label": "chitin dummy",
       "form": "training_dummy",
-      "materials": ["chitin", "heartwood", "granite"],
-      "at": [8, -1.5]
+      "materials": [
+        "chitin",
+        "heartwood",
+        "granite"
+      ],
+      "at": [
+        8,
+        -1.5
+      ]
     },
     {
       "label": "iron plate dummy",
       "form": "training_dummy",
-      "materials": ["cold_iron", "heartwood", "granite"],
-      "at": [8, 1.5]
+      "materials": [
+        "cold_iron",
+        "heartwood",
+        "granite"
+      ],
+      "at": [
+        8,
+        1.5
+      ]
     },
     {
       "label": "obsidian dummy",
       "form": "training_dummy",
-      "materials": ["obsidian", "heartwood", "granite"],
-      "at": [5, 4]
+      "materials": [
+        "obsidian",
+        "heartwood",
+        "granite"
+      ],
+      "at": [
+        5,
+        4
+      ]
     },
     {
       "label": "spider silk dummy",
       "form": "training_dummy",
-      "materials": ["spider_silk", "heartwood", "granite"],
-      "at": [2, 6]
+      "materials": [
+        "spider_silk",
+        "heartwood",
+        "granite"
+      ],
+      "at": [
+        2,
+        6
+      ]
     },
     {
       "label": "bone dummy",
       "form": "training_dummy",
-      "materials": ["bone", "heartwood", "granite"],
-      "at": [-2, 6]
+      "materials": [
+        "bone",
+        "heartwood",
+        "granite"
+      ],
+      "at": [
+        -2,
+        6
+      ]
     },
-
     {
       "$comment": "A forge that is genuinely cooling. There is no fuel model at M1, so it will drop below 900 and freeze into basalt after a few minutes — which is the honest behaviour and worth watching.",
       "label": "magma pool",
       "material": "magma",
       "volume": 6,
-      "at": [-6, -4],
+      "at": [
+        -6,
+        -4
+      ],
       "temp": 1400
     },
     {
       "label": "ice block",
       "material": "ice",
       "volume": 6,
-      "at": [-6, 4],
+      "at": [
+        -6,
+        4
+      ],
       "temp": -30
     },
     {
       "label": "water trough",
       "material": "water",
       "volume": 3,
-      "at": [-3, 0],
+      "at": [
+        -3,
+        0
+      ],
       "temp": 15
     },
     {
       "label": "stormcrystal",
       "material": "stormcrystal",
       "volume": 2,
-      "at": [3, -7],
+      "at": [
+        3,
+        -7
+      ],
       "charge": 22
     },
     {
       "label": "copper post",
       "material": "copper",
       "volume": 1.5,
-      "at": [5, -7]
+      "at": [
+        5,
+        -7
+      ]
     },
     {
       "label": "copper post",
       "material": "copper",
       "volume": 1.5,
-      "at": [7, -7]
+      "at": [
+        7,
+        -7
+      ]
     },
     {
       "label": "saltpetre pile",
       "material": "saltpetre",
       "volume": 2,
-      "at": [-8, 0]
+      "at": [
+        -8,
+        0
+      ]
     },
     {
       "label": "pitchwood log",
       "material": "pitchwood",
       "volume": 1.5,
-      "at": [-9, 2]
+      "at": [
+        -9,
+        2
+      ]
     },
     {
       "label": "pitchwood log",
       "material": "pitchwood",
       "volume": 1.5,
-      "at": [-10.5, 2]
+      "at": [
+        -10.5,
+        2
+      ]
     },
     {
       "label": "chalkstone block",
       "material": "chalkstone",
       "volume": 3,
-      "at": [-8, -2]
+      "at": [
+        -8,
+        -2
+      ]
     },
     {
       "label": "granite boulder",
       "material": "granite",
       "volume": 5,
-      "at": [1, -4]
+      "at": [
+        3,
+        -3.5
+      ],
+      "$comment": "Moved clear of the lane south, which is the approach to §5.2's crowd. A feel session should not open with squeezing past a rock."
     },
     {
       "label": "rime salt heap",
       "material": "rime_salt",
       "volume": 4,
-      "at": [-3, -6]
+      "at": [
+        -3,
+        -6
+      ]
     }
-  ]
+  ],
+  "crowd": {
+    "$comment": "§5.2's engagement composition — '8–20 trivial, 3–6 notable, 0–1 elite, peaking around 40 entities' — and §17 M1's feel gate, which asks for 'a weapon and 20 enemies in a bare arena'. These are targets rather than enemies: agency is §10.3 and lands at M4, and nothing here would be improved by faking it early. What the tiers do carry is the part §5.2 is actually about — fidelity LOD in the *body*, never in the resolver. A trivial target is one lump of one material, a notable is a three-part assembly, an elite is a full seven-part one, and the same §6.3 resolver runs over all three.",
+    "at": [
+      0,
+      -16
+    ],
+    "spread": 7.5,
+    "tiers": [
+      {
+        "tier": "trivial",
+        "$comment": "One part, one aggregate material, no propagation. Freeze-then-shatter still works on them because the aggregate still has elasticity and phase points — that is §5.2's whole claim.",
+        "count": 14,
+        "volume": 0.75,
+        "materials": [
+          "flesh",
+          "chitin",
+          "frozen_flesh",
+          "boarhide"
+        ]
+      },
+      {
+        "tier": "notable",
+        "count": 5,
+        "form": "training_dummy",
+        "materials": [
+          "chitin",
+          "heartwood",
+          "granite"
+        ]
+      },
+      {
+        "tier": "elite",
+        "count": 1,
+        "form": "body_carapace",
+        "materials": [
+          "flesh",
+          "chitin",
+          "chitin",
+          "flesh",
+          "flesh",
+          "flesh",
+          "flesh"
+        ]
+      }
+    ]
+  }
 }

@@ -270,6 +270,9 @@ const arena = readJson<{
   player: { form: string; materials: string[] };
   rack: Array<{ label: string; form: string; materials: string[] }>;
   props: Array<{ label: string; form?: string; materials?: string[]; material?: string }>;
+  crowd: {
+    tiers: Array<{ tier: string; count: number; form?: string; materials: string[] }>;
+  };
 }>("data/arena.json");
 const formIds = new Set(forms.forms.map((f) => f.id));
 const slotCount = new Map(forms.forms.map((f) => [f.id, f.parts.length]));
@@ -301,6 +304,43 @@ for (const prop of arena.props) {
     if (!ids.has(prop.material)) problems.push(`${where}: unknown material "${prop.material}"`);
   } else {
     problems.push(`${where}: neither a form nor a material`);
+  }
+}
+
+// §5.2's tiers are fidelity LOD in the body, so the shape of each tier is part
+// of the contract: a trivial target is one lump and cannot have a form, and the
+// other two are assemblies and must fill every slot of theirs. The composition
+// bands are the document's own — "8–20 trivial, 3–6 notable, 0–1 elite".
+const BANDS: Record<string, [number, number]> = {
+  trivial: [8, 20],
+  notable: [3, 6],
+  elite: [0, 1],
+};
+const seenTiers = new Set<string>();
+for (const tier of arena.crowd.tiers) {
+  const where = `crowd tier "${tier.tier}"`;
+  if (seenTiers.has(tier.tier)) problems.push(`${where}: listed twice`);
+  seenTiers.add(tier.tier);
+  const band = BANDS[tier.tier];
+  if (band && (tier.count < band[0] || tier.count > band[1])) {
+    problems.push(
+      `${where}: §5.2 asks for ${band[0]}–${band[1]} of these, and the arena has ${tier.count}`,
+    );
+  }
+  if (tier.tier === "trivial") {
+    if (tier.form) problems.push(`${where}: a trivial target is a single lump and has no form`);
+    for (const m of tier.materials) {
+      if (!ids.has(m)) problems.push(`${where}: unknown material "${m}"`);
+    }
+  } else if (!tier.form) {
+    problems.push(`${where}: an assembly tier needs a form`);
+  } else {
+    checkAssembly(where, tier.form, tier.materials);
+  }
+}
+for (const tier of Object.keys(BANDS)) {
+  if (!seenTiers.has(tier) && BANDS[tier][0] > 0) {
+    problems.push(`crowd: §5.2's "${tier}" tier is missing`);
   }
 }
 

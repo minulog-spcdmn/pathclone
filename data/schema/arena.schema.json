@@ -4,29 +4,69 @@
   "title": "Hand-made arena",
   "description": "DESIGN.md §17 M1: 'Single-player, one small hand-made arena.' Hand-made, and made of data. There is no level format here beyond forms and materials placed at coordinates, because in a game with no content database that is all a place can be. Worldgen (§7) replaces this file at M2; until then it is the only authored place in the project.",
   "type": "object",
-  "required": ["ambient_temp", "player", "rack", "props"],
+  "required": [
+    "ambient_temp",
+    "player",
+    "rack",
+    "props",
+    "crowd"
+  ],
   "additionalProperties": false,
   "properties": {
-    "$comment": { "type": "string" },
-    "ambient_temp": { "type": "number" },
+    "$comment": {
+      "type": "string"
+    },
+    "ambient_temp": {
+      "type": "number"
+    },
     "player": {
       "description": "Not a player type. An entity with a Body, Effectors, Locomotion and Agency — §6.1 forbids anything else, and the only thing that makes it the player is that a keyboard writes its Agency.",
       "type": "object",
-      "required": ["form", "materials", "at", "strength", "locomotion"],
+      "required": [
+        "form",
+        "materials",
+        "at",
+        "strength",
+        "locomotion"
+      ],
       "additionalProperties": false,
       "properties": {
-        "$comment": { "type": "string" },
-        "form": { "type": "string" },
-        "materials": { "type": "array", "items": { "type": "string" } },
-        "at": { "$ref": "#/$defs/point" },
-        "strength": { "type": "number", "exclusiveMinimum": 0 },
+        "$comment": {
+          "type": "string"
+        },
+        "form": {
+          "type": "string"
+        },
+        "materials": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "at": {
+          "$ref": "#/$defs/point"
+        },
+        "strength": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
         "locomotion": {
           "type": "object",
-          "required": ["max_speed", "accel", "mass_ref"],
+          "required": [
+            "max_speed",
+            "accel",
+            "mass_ref"
+          ],
           "additionalProperties": false,
           "properties": {
-            "max_speed": { "type": "number", "exclusiveMinimum": 0 },
-            "accel": { "type": "number", "exclusiveMinimum": 0 },
+            "max_speed": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "accel": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
             "mass_ref": {
               "description": "The carried mass at which top speed halves. This is the whole of encumbrance.",
               "type": "number",
@@ -42,12 +82,25 @@
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["label", "form", "materials"],
+        "required": [
+          "label",
+          "form",
+          "materials"
+        ],
         "additionalProperties": false,
         "properties": {
-          "label": { "type": "string" },
-          "form": { "type": "string" },
-          "materials": { "type": "array", "items": { "type": "string" } },
+          "label": {
+            "type": "string"
+          },
+          "form": {
+            "type": "string"
+          },
+          "materials": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "note": {
             "description": "What the numbers mean, for the loadout panel. Prose, never a stat.",
             "type": "string"
@@ -59,24 +112,114 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["label", "at"],
+        "required": [
+          "label",
+          "at"
+        ],
         "additionalProperties": false,
         "properties": {
-          "$comment": { "type": "string" },
-          "label": { "type": "string" },
-          "at": { "$ref": "#/$defs/point" },
+          "$comment": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "at": {
+            "$ref": "#/$defs/point"
+          },
           "form": {
             "description": "For an assembly. Mutually exclusive with `material`.",
             "type": "string"
           },
-          "materials": { "type": "array", "items": { "type": "string" } },
+          "materials": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "material": {
             "description": "For a single lump. Mutually exclusive with `form`.",
             "type": "string"
           },
-          "volume": { "type": "number", "exclusiveMinimum": 0 },
-          "temp": { "type": "number" },
-          "charge": { "type": "number", "minimum": 0 }
+          "volume": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "temp": {
+            "type": "number"
+          },
+          "charge": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "crowd": {
+      "description": "§5.2's engagement composition, and the subject of §17 M1's feel gate. The tiers are fidelity LOD in the body only: trivial is one lump of one aggregate material, notable a three-part assembly, elite a full one. The impulse resolver is identical for all three — §5.2 is explicit that there is no separate combat system, per P1.",
+      "type": "object",
+      "required": [
+        "at",
+        "spread",
+        "tiers"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "$comment": {
+          "type": "string"
+        },
+        "at": {
+          "$ref": "#/$defs/point"
+        },
+        "spread": {
+          "description": "Radius of the scatter, in world units. Placement is a deterministic spiral, so the arena is the same arena every reset.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "tiers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "tier",
+              "count",
+              "materials"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "$comment": {
+                "type": "string"
+              },
+              "tier": {
+                "enum": [
+                  "trivial",
+                  "notable",
+                  "elite"
+                ]
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 64
+              },
+              "form": {
+                "description": "Omitted for the trivial tier, which is a single lump and has no form by definition.",
+                "type": "string"
+              },
+              "volume": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "materials": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -86,7 +229,9 @@
       "type": "array",
       "minItems": 2,
       "maxItems": 2,
-      "items": { "type": "number" }
+      "items": {
+        "type": "number"
+      }
     }
   }
 }

@@ -78,6 +78,14 @@ interface PropEntry {
   charge?: number;
 }
 
+interface CrowdTier {
+  tier: "trivial" | "notable" | "elite";
+  count: number;
+  form?: string;
+  volume?: number;
+  materials: string[];
+}
+
 interface ArenaDoc {
   ambient_temp: number;
   player: {
@@ -89,6 +97,7 @@ interface ArenaDoc {
   };
   rack: RackEntry[];
   props: PropEntry[];
+  crowd: { at: [number, number]; spread: number; tiers: CrowdTier[] };
 }
 
 const arena = arenaDoc as unknown as ArenaDoc;
@@ -194,7 +203,42 @@ function buildArena() {
     labels.set(e, prop.label);
     if (prop.charge) sim.setPartCharge(e, 0, prop.charge);
   }
+  buildCrowd();
   sim.step(1);
+}
+
+/**
+ * §5.2's crowd, and the subject of §17 M1's feel gate.
+ *
+ * The tiers differ in one thing: how many parts the `Body` has. A trivial
+ * target is one lump of one aggregate material, a notable is a three-part
+ * assembly, an elite is a full seven-part one. Nothing below this function
+ * knows which is which — there is no tier field in the simulation, no separate
+ * combat path, and no branch anywhere on what a thing is. §5.2 is explicit
+ * that only `Body` complexity varies, and P1 is why.
+ *
+ * Placement is a golden-angle spiral rather than a random scatter, so the
+ * arena is the same arena on every reset and a feel session is repeatable.
+ */
+function buildCrowd() {
+  const { at, spread, tiers } = arena.crowd;
+  const total = tiers.reduce((n, t) => n + t.count, 0);
+  let index = 0;
+  for (const tier of tiers) {
+    for (let i = 0; i < tier.count; i++) {
+      // Sunflower placement: even density, no clumps, no generator.
+      const r = spread * Math.sqrt((index + 0.5) / total);
+      const theta = index * 2.399963229728653;
+      const where = { x: at[0] + r * Math.cos(theta), y: at[1] + r * Math.sin(theta), z: 0 };
+      const material = tier.materials[i % tier.materials.length];
+      const e =
+        tier.tier === "trivial"
+          ? sim.spawnLump(material, tier.volume ?? 1, where, arena.ambient_temp)
+          : sim.assemble(tier.form!, tier.materials, where, arena.ambient_temp);
+      labels.set(e, `${tier.tier} ${i + 1}`);
+      index++;
+    }
+  }
 }
 
 /**
@@ -237,6 +281,20 @@ let mouseDown = false;
 /** Ticks since the last connecting swing, for the arc animation. */
 let swingAge = 99;
 let swingHit = false;
+
+/**
+ * Transferred kinetic at which hit-stop and shake reach full strength.
+ *
+ * The one hand-authored number in the feel layer, and it is a presentation
+ * scale rather than a rule: it says how much energy counts as "a lot" to a
+ * camera, not what a blow does. Roughly a solid two-handed blow landing on
+ * something that breaks.
+ */
+const HITSTOP_FULL_ENERGY = 12;
+/** Render frames still owed to §12.6's hit-stop. Never touches the tick. */
+let hitStopFrames = 0;
+/** 0–1, decaying; drives the camera offset. */
+let shake = 0;
 
 interface DrawnPart {
   entity: number;
@@ -285,6 +343,40 @@ function stepWorld() {
   } else {
     swingAge++;
   }
+
+  registerImpactFeel();
+}
+
+/**
+ * §5.1 and §12.6: "hit-stop (2–5 frames scaled by transferred kinetic), camera
+ * shake, debris entities". Debris already exists — a fracture spawns real
+ * entities — so this is the other two.
+ *
+ * It reads the resolver's own numbers and nothing else. There is no per-weapon
+ * authoring here and there cannot be: the energy is whatever `derive_strike`
+ * produced from the materials in hand, so a heavier or harder weapon hits
+ * harder on screen for the same reason it hits harder in the simulation.
+ *
+ * Both effects are presentation only. The stop holds the *wall clock*, never
+ * the tick: the accumulator is not advanced during it, so the simulation
+ * resumes on exactly the tick it would have run anyway. §14.4's determinism
+ * survives because nothing here can reach the simulation.
+ */
+function registerImpactFeel() {
+  const since = sim.tick - 1;
+  let energy = 0;
+  let fractured = false;
+  for (const e of events) {
+    if (e.tick < since) break;
+    if (e.kind === "fractured") fractured = true;
+    if (e.kind === "impact") energy = Math.max(energy, e.a);
+  }
+  // §12.6: "glancing blows don't stop at all". Only a fracture stops time, and
+  // then only as far as the energy that caused it justifies.
+  if (!fractured || energy <= 0) return;
+  const scale = Math.min(1, energy / HITSTOP_FULL_ENERGY);
+  hitStopFrames = Math.max(hitStopFrames, Math.round(2 + scale * 3));
+  shake = Math.max(shake, scale);
 }
 
 function playerPosition(): { x: number; y: number } {
@@ -346,9 +438,14 @@ function draw() {
 
   zoom = 46 * zoomMul;
   const focus = inScenario ? centreOfWorld() : playerPosition();
+  // §12.6's camera shake, in screen space so it cannot disturb a world
+  // coordinate anything else reads. Two incommensurable frequencies, so it
+  // reads as a jolt rather than a wobble.
+  const shakeX = shake === 0 ? 0 : Math.sin(performance.now() / 11) * shake * 9;
+  const shakeY = shake === 0 ? 0 : Math.cos(performance.now() / 7) * shake * 9;
   const toScreen = (x: number, y: number): [number, number] => [
-    w / 2 + (x - focus.x) * zoom,
-    h / 2 + (y - focus.y) * zoom,
+    w / 2 + (x - focus.x) * zoom + shakeX,
+    h / 2 + (y - focus.y) * zoom + shakeY,
   ];
 
   // Ground grid: one line per world unit, so distance is readable and the
@@ -955,12 +1052,22 @@ let paintedTick = -1;
 function frame(now: number) {
   // Fixed-step simulation, uncapped render (§13.2). The clamp stops a
   // backgrounded tab from trying to catch up on thousands of ticks at once.
-  accumulator = Math.min(accumulator + (now - last), TICK_MS * 6);
+  const elapsed = now - last;
   last = now;
-  while (accumulator >= TICK_MS) {
-    stepWorld();
-    accumulator -= TICK_MS;
+  if (hitStopFrames > 0) {
+    // §12.6's hit-stop. The world is held still for a few render frames and
+    // the time is dropped rather than banked, so nothing catches up
+    // afterwards. The simulation is not involved: it simply is not stepped.
+    hitStopFrames--;
+  } else {
+    accumulator = Math.min(accumulator + elapsed, TICK_MS * 6);
+    while (accumulator >= TICK_MS) {
+      stepWorld();
+      accumulator -= TICK_MS;
+    }
   }
+  shake *= 0.86;
+  if (shake < 0.01) shake = 0;
 
   draw();
   if (sim.tick !== paintedTick) {
@@ -989,6 +1096,7 @@ function frame(now: number) {
     })),
   reach: () => sim.reachOf(player),
   attack: () => sim.attackOf(player),
+  feel: () => ({ hitStopFrames, shake }),
   speed: () => sim.speedOf(player),
   integrity: (entity: number, part: number) => sim.partIntegrity(entity, part),
   material: (entity: number, part: number) => sim.materialName(sim.partMaterial(entity, part)),

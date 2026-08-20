@@ -95,6 +95,25 @@ maul feels absurd without anyone tuning it. A press made during recovery is
 queued and fires on the first legal tick; a press made during the windup is
 not, and expires.
 
+A fracture stops time for two to five frames and shakes the camera, both scaled
+by the kinetic energy the blow actually transferred (§12.6). A glancing blow
+does neither. The scale comes from the resolver, so a maul lands heavier on
+screen for the same reason it lands heavier in the simulation — the sword gets
+two frames against the flesh dummy and the maul gets four. Nothing is authored
+per weapon, and the stop holds the wall clock rather than the tick, so
+determinism is untouched.
+
+South of the rack stands §5.2's crowd: **14 trivial, 5 notable, 1 elite**, which
+is the composition the design asks for and the subject of §17 M1's feel gate.
+The tiers differ in one thing — how many parts the body has. A trivial target is
+one lump of one aggregate material, a notable is a three-part assembly, an elite
+is a full seven-part one, and the *same* impulse resolver runs over all three.
+Freeze-then-shatter works identically on the one-part body and the seven-part
+one, which is asserted as a test rather than claimed here. There is no tier
+field anywhere in the simulation.
+
+They are targets, not enemies: agency is §10.3 and arrives at M4.
+
 Six training dummies differ in exactly one thing: what their target slot is
 made of. Walk between them with the same weapon and the substrate teaches
 itself.
@@ -284,6 +303,11 @@ Everything above M1. There is no worldgen (§7), no crafting processes (§8.2), 
 ability graphs (§9), no creatures, ecology or AI (§10), no claims, economy or
 multiplayer (§11, §13), and no persistence (§7.3). §17 M1 forbids starting any of
 it until the gate passes.
+
+The crowd does not fight back, and calling it "20 enemies" would be a lie —
+§10.3's utility AI is M4 work and faking it early would make the feel gate
+measure the fake. What it does carry is §5.2's actual subject: fidelity LOD in
+the body, never in the resolver.
 
 The melee layer is deliberately thin: reach, a facing arc, §5.1's three phases
 and a dodge. There is no combo system, no stamina, no attack animation state

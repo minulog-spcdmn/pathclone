@@ -791,3 +791,95 @@ fn a_blow_that_nearly_broke_something_says_so() {
     );
 }
 
+
+/// §5.2: "The impulse resolver is unchanged for every tier. Only the `Body`
+/// complexity varies. Freeze-then-shatter still works on trivial enemies
+/// because their single aggregate material still has `elasticity` and
+/// `phase_points` — it just resolves in one step. **No special cases, per P1.**"
+///
+/// So the tactic is run twice against the same material: once on a one-part
+/// body, once on a seven-part assembly. Both must survive the blow warm and
+/// shatter under it frozen, and neither path may be reachable by asking what
+/// tier anything is, because nothing in the simulation carries one.
+#[test]
+fn the_same_tactic_works_on_every_body_tier() {
+    let flesh = match sim_or_skip!(37).material_id("flesh") {
+        Some(m) => m,
+        None => return,
+    };
+
+    // `frozen` decides only what temperature the target starts at. Everything
+    // after that is the same call on both tiers.
+    let outcome = |trivial: bool, frozen: bool| -> Option<bool> {
+        let (mut s, attacker, stock_dummy) = duel(37, "maul_head_haft", &["cold_iron", "heartwood", "boarhide"], "flesh", 1)?;
+        // The duel's own dummy stands exactly where this test wants to put its
+        // target, and a swing takes the nearest thing in front of it.
+        s.ecs.despawn(stock_dummy);
+        let hide = s.material_id("boarhide")?;
+        let at = V3::new(Fx::from_int(1), Fx::ZERO, Fx::ZERO);
+        let target = if trivial {
+            // §5.2's trivial tier: one part, one aggregate material.
+            s.spawn_lump(flesh, Fx::ONE, at)
+        } else {
+            let bipedal = s.form_id("body_bipedal")?;
+            let body = s
+                .forms
+                .assemble(bipedal, &[flesh, flesh, flesh, flesh, flesh, flesh, hide])?;
+            let t = s.rules.ambient_temp;
+            s.spawn_at_temp(body, at, t)
+        };
+        if frozen {
+            // Held under, not set cold once: ambient conduction is pulling the
+            // other way the whole time, and the solidify bank only fills while
+            // the part is actually below its point. This is what a sustained
+            // cold source is, and it is why freezing something is a tactic with
+            // a cost rather than a status you apply.
+            let parts = s.ecs.body.get(target).map(|b| b.parts.len()).unwrap_or(0);
+            for _ in 0..400 {
+                for i in 0..parts {
+                    s.inject(target, i as u16, Impulse::thermal(Fx::from_int(-30)));
+                }
+                s.run(1);
+            }
+            let became = s
+                .ecs
+                .body
+                .get(target)?
+                .parts
+                .first()
+                .map(|p| s.materials.name(p.material).to_string())
+                .unwrap_or_default();
+            assert_eq!(
+                became, "frozen_flesh",
+                "the target never froze, so the tactic was never set up (it is {became})"
+            );
+        }
+        let mark = s.tick;
+        for _ in 0..6 {
+            s.swing_now(attacker);
+            s.run(1);
+        }
+        let broke = s
+            .events
+            .since(mark)
+            .any(|e| e.kind == EventKind::Fractured && e.entity == target);
+        Some(broke)
+    };
+
+    for trivial in [true, false] {
+        let tier = if trivial { "trivial (one part)" } else { "elite (seven parts)" };
+        let warm = match outcome(trivial, false) {
+            Some(v) => v,
+            None => return,
+        };
+        let cold = outcome(trivial, true).unwrap();
+        assert!(
+            !warm,
+            "the {tier} target shattered without being frozen first, so the tactic proves nothing"
+        );
+        assert!(
+            cold,
+            "freeze-then-shatter did not work on the {tier} target, so the resolver is not tier-independent"
+        );
+    }
+}
